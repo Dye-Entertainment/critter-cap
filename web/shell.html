@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Small Cap</title>
+<style>
+  :root {
+    --bg: #14101c;
+    --panel: #241d33;
+    --text: #f1ebdd;
+    --muted: #b1a8c4;
+    --accent: #f8d040;
+  }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+  }
+  #stage {
+    position: fixed;
+    inset: 0 0 34px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  /* The engine renders 240x160 game pixels into a 960x640 canvas; CSS scales it to fit.
+     SDL writes inline sizes onto the canvas, so these need !important to win. */
+  #canvas {
+    display: block;
+    width: min(100vw, calc((100vh - 34px) * 3 / 2)) !important;
+    height: min(calc(100vh - 34px), calc(100vw * 2 / 3)) !important;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    background: #000;
+    outline: none;
+  }
+  #controls {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    font-size: 13px;
+    color: var(--muted);
+    flex-wrap: wrap;
+  }
+  #controls b { color: var(--text); }
+  #overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    background: radial-gradient(circle at 50% 40%, #3a2a1a 0%, var(--bg) 70%);
+    z-index: 10;
+    transition: opacity 0.4s;
+  }
+  #overlay h1 {
+    margin: 0;
+    font-size: clamp(32px, 8vw, 72px);
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    text-shadow: 0 4px 0 #5a3a10;
+  }
+  #overlay p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 15px;
+    text-align: center;
+    padding: 0 16px;
+  }
+  #bar {
+    width: min(360px, 80vw);
+    height: 8px;
+    border-radius: 4px;
+    background: var(--panel);
+    overflow: hidden;
+  }
+  #bar > div {
+    width: 0%;
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.2s;
+  }
+  #play {
+    display: none;
+    font: inherit;
+    font-size: 18px;
+    font-weight: 600;
+    padding: 12px 32px;
+    border-radius: 8px;
+    border: 2px solid var(--accent);
+    background: transparent;
+    color: var(--accent);
+    cursor: pointer;
+  }
+  #play:hover { background: rgba(248, 208, 64, 0.12); }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas></div>
+<div id="controls">
+  <span><b>Arrows/WASD</b> move</span>
+  <span><b>Z</b> sword (hold to charge)</span>
+  <span><b>X</b> talk / open</span>
+  <span><b>C</b> roll</span>
+  <span><b>Enter</b> start / pause</span>
+</div>
+<div id="overlay">
+  <h1>SMALL CAP</h1>
+  <p id="status">Loading…</p>
+  <div id="bar"><div></div></div>
+  <button id="play">Click to play</button>
+  <p>An original tiny adventure built on the evogine engine.</p>
+</div>
+
+<script>
+  var canvas = document.getElementById('canvas');
+  var overlay = document.getElementById('overlay');
+  var statusText = document.getElementById('status');
+  var barFill = document.querySelector('#bar > div');
+  var playButton = document.getElementById('play');
+
+  // Keep game keys from scrolling the page.
+  window.addEventListener('keydown', function (e) {
+    if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].indexOf(e.code) >= 0) {
+      e.preventDefault();
+    }
+  }, { capture: true });
+  canvas.addEventListener('mousedown', function () { canvas.focus(); });
+
+  window.addEventListener('webglcontextlost', function () {
+    statusText.textContent = 'The graphics context was lost. Reload the page to continue.';
+  });
+
+  // Browsers only start audio after a user gesture, so the game waits behind a play button.
+  playButton.addEventListener('click', function () {
+    overlay.style.opacity = '0';
+    setTimeout(function () { overlay.style.display = 'none'; }, 400);
+    canvas.focus();
+  });
+
+  var Module = {
+    canvas: canvas,
+    print: function (text) { console.log(text); },
+    printErr: function (text) { console.warn(text); },
+    setStatus: function (text) {
+      if (!text) {
+        return;
+      }
+      var match = text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
+      if (match) {
+        barFill.style.width = (100 * parseInt(match[2], 10) / parseInt(match[4], 10)).toFixed(0) + '%';
+        statusText.textContent = 'Downloading…';
+      } else {
+        statusText.textContent = text;
+      }
+    },
+    monitorRunDependencies: function (left) {
+      if (left === 0) {
+        statusText.textContent = 'Starting…';
+      }
+    },
+    onRuntimeInitialized: function () {
+      barFill.style.width = '100%';
+      statusText.textContent = 'Ready!';
+      document.getElementById('bar').style.display = 'none';
+      playButton.style.display = 'block';
+    },
+    onAbort: function (what) {
+      overlay.style.display = 'flex';
+      overlay.style.opacity = '1';
+      statusText.textContent = 'The game crashed: ' + what + '. Reload the page to try again.';
+    }
+  };
+</script>
+{{{ SCRIPT }}}
+</body>
+</html>

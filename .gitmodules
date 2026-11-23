@@ -1,0 +1,4 @@
+[submodule "evogine"]
+	path = evogine
+	url = git@github.com:Dye-Entertainment/evogine.git
+	ignore = untracked

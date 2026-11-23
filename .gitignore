@@ -1,0 +1,8 @@
+/build-*/
+/build-evogen.log
+/compile_commands.json
+.cache/
+__pycache__/
+/site/
+/resources/templates/
+/build-*.log

@@ -1,0 +1,4 @@
+{
+	"vertex": "game://shaders/sprite.vs",
+	"fragment": "game://shaders/sprite.fs"
+}
