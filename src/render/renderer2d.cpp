@@ -14,12 +14,14 @@
 #include <nlohmann/json.hpp>
 #include "compiled/warning_on.h"
 
-namespace smallcap
+namespace crittercap
 {
 namespace
 {
 constexpr Float DEPTH_FAR = 9.5f;
-constexpr Float DEPTH_STEP = 0.00015f;
+// Wide enough that consecutive draws stay distinct even with a 16-bit depth buffer
+// (about 15k draws per frame).
+constexpr Float DEPTH_STEP = 0.0006f;
 
 const VertexLayout &QuadLayout()
 {
@@ -76,7 +78,7 @@ Bool Renderer2D::Initialize()
     if (!shaderProgram.isValid() || !spriteTexture.isValid() || !tileTexture.isValid() ||
         !atlas_json.has_value() || !tileset_json.has_value())
     {
-        LOGERROR("Failed to load Small Cap's textures or shaders");
+        LOGERROR("Failed to load Critter Cap's textures or shaders");
         return false;
     }
 
@@ -386,4 +388,4 @@ void Renderer2D::Box(const Float x, const Float y, const Float w, const Float h)
         FillRect(x + 8.0f, y + 8.0f, (cols - 2) * 8.0f, (rows - 2) * 8.0f, {0.141f, 0.157f, 0.345f, 1.0f});
     }
 }
-} // namespace smallcap
+} // namespace crittercap

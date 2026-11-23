@@ -2,7 +2,7 @@
 #include "ecs/core/game_application.h"
 #include "render/renderer2d.h"
 
-class SmallCap final : public GameApplication
+class CritterCap final : public GameApplication
 {
   public:
     Bool DerrivedInitialize() override;
@@ -10,5 +10,5 @@ class SmallCap final : public GameApplication
     void Destroy() override;
 
   private:
-    smallcap::Renderer2D renderer;
+    crittercap::Renderer2D renderer;
 };

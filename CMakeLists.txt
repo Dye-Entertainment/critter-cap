@@ -1,14 +1,14 @@
 cmake_minimum_required(VERSION 3.28)
 include(evogine/src/evogine.cmake)
 include(evogine/src/cmake.cmake)
-set(APPLICATION_TARGET small-cap)
-project(small-cap LANGUAGES C CXX)
+set(APPLICATION_TARGET critter-cap)
+project(critter-cap LANGUAGES C CXX)
 
 set(PROJECT_ROOT_DIR ${CMAKE_CURRENT_LIST_DIR})
 file(GLOB_RECURSE PROJECT_SOURCE_FILES "${CMAKE_CURRENT_LIST_DIR}/src/*.cpp")
 file(GLOB_RECURSE PROJECT_HEADER_FILES "${CMAKE_CURRENT_LIST_DIR}/src/*.h")
-add_executable(small-cap ${PROJECT_SOURCE_FILES} ${PROJECT_HEADER_FILES})
-target_include_directories(small-cap PRIVATE "${CMAKE_CURRENT_LIST_DIR}/src/")
+add_executable(critter-cap ${PROJECT_SOURCE_FILES} ${PROJECT_HEADER_FILES})
+target_include_directories(critter-cap PRIVATE "${CMAKE_CURRENT_LIST_DIR}/src/")
 
 # Engine modules this game uses. Tiled/box2d are not needed: maps are Tiled JSON files that the
 # game reads through the asset manager and collides against its own tile grid.
@@ -34,7 +34,7 @@ set(IMGUI_EXTENSION_ENABLED OFF CACHE BOOL "Enable feature" FORCE)
 
 add_subdirectory(evogine/src engine_build)
 
-target_link_libraries(small-cap PRIVATE evogine)
+target_link_libraries(critter-cap PRIVATE evogine)
 ADD_RESOURCE_PATH("game,${CMAKE_CURRENT_LIST_DIR}/resources")
 GENERATE_RESOURCE_HEADER()
 generate_components()
@@ -45,18 +45,18 @@ if(EMSCRIPTEN)
         string(REPLACE "," ";" parts "${resource_path_pair}")
         list(GET parts 0 mount_name)
         list(GET parts 1 mount_path)
-        target_link_options(small-cap PRIVATE
+        target_link_options(critter-cap PRIVATE
                 "SHELL:--preload-file \"${mount_path}@/${mount_name}\""
         )
     endforeach()
-    set_target_properties(small-cap PROPERTIES SUFFIX ".html")
-    target_link_options(small-cap PRIVATE
+    set_target_properties(critter-cap PROPERTIES SUFFIX ".html")
+    target_link_options(critter-cap PRIVATE
             "-sMIN_WEBGL_VERSION=2"
             "-sMAX_WEBGL_VERSION=2"
             "-sALLOW_MEMORY_GROWTH=1"
             "SHELL:--shell-file ${CMAKE_CURRENT_LIST_DIR}/web/shell.html"
     )
-    set_property(TARGET small-cap APPEND PROPERTY LINK_DEPENDS
+    set_property(TARGET critter-cap APPEND PROPERTY LINK_DEPENDS
             "${CMAKE_CURRENT_LIST_DIR}/web/shell.html"
     )
 endif()

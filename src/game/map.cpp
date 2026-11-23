@@ -8,7 +8,7 @@
 #include <nlohmann/json.hpp>
 #include "compiled/warning_on.h"
 
-namespace smallcap
+namespace crittercap
 {
 namespace
 {
@@ -59,6 +59,8 @@ Music MusicFromName(const std::string &name)
         return Music::DUNGEON;
     if (name == "boss")
         return Music::BOSS;
+    if (name == "battle")
+        return Music::BATTLE;
     return Music::NONE;
 }
 } // namespace
@@ -85,6 +87,7 @@ Bool LoadTileInfo(TileInfo &info)
     const auto count = tileset["tilecount"].get<size_t>();
     info.solid.assign(count, 0);
     info.water.assign(count, 0);
+    info.grass.assign(count, 0);
     info.animPartner.assign(count, 0);
     for (const auto &[key, props] : tileset["properties"].items())
     {
@@ -95,6 +98,7 @@ Bool LoadTileInfo(TileInfo &info)
         }
         info.solid[id] = props.value("solid", false) ? 1 : 0;
         info.water[id] = props.value("water", false) ? 1 : 0;
+        info.grass[id] = props.value("grass", false) ? 1 : 0;
         if (props.contains("anim"))
         {
             info.animPartner[id] = props["anim"].get<UInt16>();
@@ -123,10 +127,14 @@ Bool LoadMap(const std::string &name, const TileInfo &info, Renderer2D &renderer
     out.title = map_props["title"];
     out.music = MusicFromName(map_props["music"]);
     out.rooms = map_props["rooms"] == "true";
+    out.encounters = map_props["encounters"];
+    out.wildEverywhere = map_props["wild"] == "everywhere";
+    out.healSpawn = map_props["heal"];
 
     const size_t cells = static_cast<size_t>(out.width * out.height);
     out.ground.assign(cells, 0);
     out.solid.assign(cells, 0);
+    out.grass.assign(cells, 0);
     for (const auto &layer : data["layers"])
     {
         const std::string type = layer["type"].get<std::string>();
@@ -141,6 +149,10 @@ Bool LoadMap(const std::string &name, const TileInfo &info, Renderer2D &renderer
                 if (id < info.solid.size() && info.solid[id])
                 {
                     out.solid[i] = 1;
+                }
+                if (id < info.grass.size() && info.grass[id])
+                {
+                    out.grass[i] = 1;
                 }
             }
         }
@@ -180,6 +192,15 @@ Bool IsSolidTile(const Map &map, const Int32 tx, const Int32 ty)
     return map.solid[static_cast<size_t>(ty * map.width + tx)] != 0;
 }
 
+Bool IsGrassTile(const Map &map, const Int32 tx, const Int32 ty)
+{
+    if (tx < 0 || ty < 0 || tx >= map.width || ty >= map.height)
+    {
+        return false;
+    }
+    return map.grass[static_cast<size_t>(ty * map.width + tx)] != 0;
+}
+
 Bool BoxHitsTiles(const Map &map, const Float x0, const Float y0, const Float x1, const Float y1)
 {
     const auto tx0 = static_cast<Int32>(std::floor(x0 / TILE));
@@ -198,4 +219,4 @@ Bool BoxHitsTiles(const Map &map, const Float x0, const Float y0, const Float x1
     }
     return false;
 }
-} // namespace smallcap
+} // namespace crittercap

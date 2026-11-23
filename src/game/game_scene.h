@@ -1,5 +1,6 @@
 #pragma once
 #include "core/scene.h"
+#include "game/battle.h"
 #include "game/world.h"
 #include "input/controls.h"
 #include "render/renderer2d.h"
@@ -11,7 +12,7 @@
 #include <vector>
 #include "compiled/warning_on.h"
 
-namespace smallcap
+namespace crittercap
 {
 enum class Phase : UInt8
 {
@@ -23,8 +24,12 @@ enum class Phase : UInt8
     FADE_IN,
     SHRINK,
     GROW,
-    GAME_OVER,
-    PAUSE,
+    BATTLE_IN,
+    BATTLE,
+    BATTLE_OUT,
+    STARTER,
+    CHOICE,
+    MENU,
     ENDING
 };
 
@@ -44,15 +49,23 @@ class GameScene final : public core::Scene
     void FinishDialog();
     void StartItemGet(const std::string &item);
     void StartWarp(const std::string &map, const std::string &spawn);
+    void StartAction(const Request &request);
+    void StartBattle(const Request &request);
+    void FinishBattle();
     void UpdateMusic();
+    void UpdateMenu();
     void RenderDialog();
     void RenderTitle();
     void RenderEnding();
-    void RenderPause();
-    void RenderGameOver();
+    void RenderMenu();
+    void RenderStarter();
+    void RenderChoice();
 
     Renderer2D *renderer = nullptr;
     World world;
+    Battle battle;
+    BattleResult battleResult = BattleResult::NONE;
+    Request battleRequest;
     Controls controls;
     Phase phase = Phase::TITLE;
     Double accumulator = 0.0;
@@ -64,18 +77,25 @@ class GameScene final : public core::Scene
     std::vector<std::string> pages;
     size_t page = 0;
     Float typed = 0.0f;
-    std::vector<std::string> lines;
 
     // What happens once the current dialog closes.
     std::string pendingItem;
     Bool pendingShrink = false;
-    Bool pendingGrow = false;
     Bool pendingEnding = false;
+    Request pendingAction;
     std::string warpMap;
     std::string warpSpawn;
     std::string currentItem;
 
-    // Test hook: SMALLCAP_INPUT="right:60 sword:1 wait:30" drives the controls.
+    // Starter pick, yes/no questions and the pause menu.
+    Int32 starterCursor = 0;
+    std::string choiceQuestion;
+    Int32 choiceCursor = 0;
+    Int32 menuTab = 0;
+    Int32 menuCursor = 0;
+    std::string afterStarterItem;
+
+    // Test hook: CRITTERCAP_INPUT="right:60 z:1 wait:30" drives the controls.
     struct ScriptStep
     {
         std::string buttons;
@@ -86,10 +106,10 @@ class GameScene final : public core::Scene
     Int32 scriptFrame = 0;
     void ApplyScript();
 
-    // Test hook: SMALLCAP_SHOTS="120,300" saves screenshots at those ticks, then quits.
+    // Test hook: CRITTERCAP_SHOTS="120,300" saves screenshots at those ticks, then quits.
     std::vector<Int32> shotTicks;
     std::vector<std::pair<std::string, std::future<resource::RawTexture>>> pendingShots;
     Int32 totalTicks = 0;
     void HandleShots();
 };
-} // namespace smallcap
+} // namespace crittercap

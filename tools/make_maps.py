@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds Small Cap's maps and writes them as Tiled JSON (.json maps + tiles.tsj tileset).
+"""Builds Critter Cap's maps and writes them as Tiled JSON (.json maps + tiles.tsj tileset).
 
 Usage: make_maps.py <out_dir>   (reads ../textures/tileset.json next to out_dir)
 The maps open in the Tiled editor; the game reads the same files.
@@ -13,8 +13,10 @@ T = 16
 
 
 class MapBuilder:
-    def __init__(self, name, w, h, base, title, music, rooms=False, seed=1):
+    def __init__(self, name, w, h, base, title, music, rooms=False, seed=1, encounters="",
+                 wild="grass", heal=""):
         self.name, self.w, self.h = name, w, h
+        self.encounters, self.wild, self.heal = encounters, wild, heal
         self.title, self.music, self.rooms = title, music, rooms
         self.rng = random.Random(seed)
         self.base = base
@@ -76,6 +78,13 @@ class MapBuilder:
             for dx, name in enumerate(row):
                 self.set(x + dx, y + dy, name)
 
+    def grass(self, x, y, w, h, kind="tallgrass"):
+        """Tall grass where wild critters hide; only fills tiles that are still plain ground."""
+        for yy in range(y, y + h):
+            for xx in range(x, x + w):
+                if self.free(xx, yy) and not self.dirt[yy][xx]:
+                    self.tiles[yy][xx] = kind if (xx + yy) % 3 else kind + "2"
+
     def free(self, x, y):
         return self.inside(x, y) and self.tiles[y][x] is None and not self.water[y][x]
 
@@ -120,6 +129,9 @@ class MapBuilder:
                 {"name": "title", "type": "string", "value": self.title},
                 {"name": "music", "type": "string", "value": self.music},
                 {"name": "rooms", "type": "bool", "value": self.rooms},
+                {"name": "encounters", "type": "string", "value": self.encounters},
+                {"name": "wild", "type": "string", "value": self.wild},
+                {"name": "heal", "type": "string", "value": self.heal},
             ],
             "tilesets": [{"firstgid": 1, "source": "../textures/tiles.tsj"}],
             "layers": [
@@ -176,7 +188,8 @@ def soil_base(x, y, rng):
 # Hearthwood village
 # =============================================================================================
 def build_village():
-    m = MapBuilder("village", 40, 26, grass_base, "Hearthwood", "village", seed=11)
+    m = MapBuilder("village", 40, 26, grass_base, "Hearthwood", "village", seed=11,
+                   encounters="blob_g:2-4:35,ant:2-4:40,pod:3-4:25", heal="mira")
     for x in range(0, 40, 2):
         m.tree(x, 0)
         m.tree(x, 24)
@@ -216,46 +229,56 @@ def build_village():
     m.set(16, 18, "grass")
     for (sx, sy) in ((2, 3), (10, 3), (24, 3), (36, 16), (2, 22)):
         m.set(sx, sy, "shrub")
+    # A little patch of tall grass behind the garden, to practise catching.
+    m.grass(21, 19, 6, 4)
 
     m.spawn("start", 6, 8)
     m.spawn("east", 37, 12, "left")
+    m.spawn("mira", 25, 11, "up")
 
     m.obj("warp", 39, 12, map="woods", spawn="west")
-    m.obj("npc", 20, 11, npc="elder", give="sword", afterIf="got_sword",
-          text="Bram: Ah, Pip! And Capo too, I see.|Capo: Morning, Elder Bram!|Bram: I'm afraid I "
-               "have grim news. The Sunstone that warms the Rootwood has gone dark.|Bram: Without "
-               "its light, blobs and beetles have overrun the woods east of the village.|Bram: Folk "
-               "say the tiny Thimblings guard the stone, deep beneath the old stump. Far too small "
-               "for us big folk...|Capo: Ahem! Too small for big folk. Not for a hero with a magic "
-               "hat!|Bram: Ho ho! Then you'll need this. It's old, but it's sharp.",
-          after="Bram: The Rootwood lies to the east. Find the old shrink stump, and let Capo do "
-                "the rest. Be careful, Pip!")
-    m.obj("npc", 37, 12, npc="guard", moveIf="got_sword", moveX="36", moveY="10",
-          afterIf="got_sword",
-          text="Guard: Halt, Pip! The Rootwood is crawling with monsters.|Guard: Nobody goes "
-               "east without a blade. Go see Elder Bram in the square.",
-          after="Guard: That's Bram's old sword! Off you go then - and watch out for beetles!")
-    m.obj("npc", 25, 9, npc="mira",
-          text="Mira: Morning, Pip! Did you know? Cutting bushes and smashing pots sometimes turns "
-               "up gems.|Mira: Hearts too, if you're feeling bruised. Just don't tell the "
-               "gardener!")
-    m.obj("npc", 12, 15, npc="tobi", wander="true",
-          text="Tobi: I saw a glowing stump in the woods! When I stood on it, my hat tingled.|"
-               "Tobi: Mom says I'm not allowed to go back there. But you have a talking hat!")
+    m.obj("npc", 20, 11, npc="elder", starter="true", give="caps5", afterIf="got_starter",
+          text="Bram: Ah, Pip! And Capo too, I see.|Capo: Morning, Elder Bram! Is it time? Is it "
+               "time?|Bram: Ho ho! It is. Every young one in Hearthwood gets a critter partner.|"
+               "Bram: But the Sunstone deep in Root Hollow has gone dark, and the wild critters are "
+               "restless. You'll need a brave partner.|Bram: Three little blobs are waiting. Pick "
+               "the one you like best!",
+          after="Bram: Wild critters hide in tall grass. Wear one down in battle, then throw a "
+                "cap!|Bram: Catch them all, and maybe you can calm the master of Root Hollow "
+                "itself.")
+    m.obj("npc", 37, 12, npc="guard", moveIf="got_starter", moveX="36", moveY="10",
+          afterIf="got_starter",
+          text="Guard: Hold on, Pip! The Rootwood's tall grass is full of wild critters.|Guard: "
+               "Nobody goes east without a partner. Go see Elder Bram in the square.",
+          after="Guard: A partner! Good. Walk through tall grass to find wild critters, and hold "
+                "X to run.")
+    m.obj("npc", 25, 9, npc="mira", heal="true", shop="true", healSpawn="mira",
+          text="Mira: Hi, Pip! I look after tired critters. Let me see your team...")
+    m.obj("npc", 30, 12, npc="tobi", dir="left", sight="5", team="rival:5", trainer="Tobi",
+          prize=20, winFlag="tobi1", afterIf="tobi1",
+          text="Tobi: Pip! Grandpa Bram gave you a critter too?|Tobi: I picked mine because it "
+               "beats yours. Let's battle!",
+          win="Tobi: Aww, no fair! I'm going to train in the Rootwood. Next time I'll win!",
+          after="Tobi: You got lucky! I'm off to the Rootwood to train.")
+    m.obj("npc", 12, 15, npc="thim2", wander="true",
+          text="Thimbling: Hello, big folk! I came up from Thimblewick to see the village.|"
+               "Thimbling: Down there everything is tiny... even the critters!")
     m.obj("sign", 35, 14, text="East: the Rootwood.\nWest: Hearthwood Village.")
-    m.obj("sign", 16, 8, text="Hearthwood Village Square.\nPlease keep off the flowers.")
+    m.obj("sign", 16, 8, text="Hearthwood Village Square.\nCritters welcome. Please keep off the "
+                              "flowers.")
+    m.obj("sign", 20, 18, text="Tall grass! Wild critters hide here. Press Enter to check your "
+                               "team.")
     # Bushes, pots and a hidden chest behind the south-east house.
     for (bx, by) in ((3, 9), (4, 9), (10, 8), (10, 9), (23, 7), (24, 7), (9, 22), (10, 22),
-                     (14, 19), (15, 19), (17, 19), (18, 19), (14, 21), (18, 21), (21, 20),
-                     (22, 20), (26, 21), (25, 21)):
+                     (14, 19), (15, 19), (17, 19), (18, 19), (14, 21), (18, 21)):
         m.obj("bush", bx, by)
-    for (px, py) in ((3, 7), (9, 7), (25, 8), (31, 13), (12, 21)):
+    for (px, py) in ((3, 7), (9, 7), (31, 13), (12, 21)):
         m.obj("pot", px, py)
     m.obj("chest", 36, 21, item="gems20")
     for (bx, by) in ((34, 20), (35, 20), (36, 20), (37, 20), (34, 21), (34, 22), (35, 22),
                      (36, 22), (37, 22), (37, 21)):
         m.obj("bush", bx, by)
-    m.obj("chest", 16, 20, item="gems20")
+    m.obj("chest", 16, 20, item="caps5")
     return m
 
 
@@ -263,7 +286,8 @@ def build_village():
 # The Rootwood
 # =============================================================================================
 def build_woods():
-    m = MapBuilder("woods", 48, 32, grass_base, "The Rootwood", "woods", seed=23)
+    m = MapBuilder("woods", 48, 32, grass_base, "The Rootwood", "woods", seed=23,
+                   encounters="blob_g:4-6:25,pod:4-7:25,beetle:5-7:15,bat:5-6:15,ant:4-6:20")
     for x in range(0, 48, 2):
         m.tree(x, 0)
         m.tree(x, 30)
@@ -299,32 +323,51 @@ def build_woods():
     m.stamp2x2("stump", 38, 4)
     for (fx, fy) in ((37, 3), (40, 3), (36, 5), (41, 6), (37, 7), (40, 7)):
         m.set(fx, fy, "flowers_w")
+    # Tall grass meadows on both sides of the trail.
+    m.grass(2, 14, 8, 2)
+    m.grass(6, 6, 9, 5)
+    m.grass(12, 14, 8, 4)
+    m.grass(24, 12, 6, 6)
+    m.grass(25, 19, 10, 3)
+    m.grass(30, 22, 12, 6)
+    m.grass(16, 26, 8, 3)
+    m.grass(38, 13, 7, 3)
+    m.grass(2, 22, 6, 6)
 
     m.spawn("west", 2, 12, "right")
     m.spawn("stump", 38, 7, "down")
     m.obj("warp", 0, 12, 1, 2, map="village", spawn="east")
-    m.obj("stump", 38, 4, 2, 2, map="tiny", spawn="portal",
+    m.obj("stump", 38, 4, 2, 2, map="tiny", spawn="portal", requires="ranger",
+          locked="Capo: The stump is humming, but its magic won't let us in...|Capo: The ranger "
+                 "guards it. Maybe we have to prove ourselves first!",
           text="Capo: This is it - the old shrink stump! I can feel it tickling my brim.|Capo: Hold "
                "on to your hat... I mean, hold on to ME!")
-    m.obj("trigger", 4, 11, 1, 4, requires="got_sword",
-          text="Capo: Brr. The Rootwood used to be so sunny...|Capo: Monsters ahead! Press Z to "
-               "swing. Hold Z, then let go for a spin attack!")
+    m.obj("npc", 36, 10, npc="guard", dir="down", sight="3", team="beetle:7,pod:7",
+          trainer="Ranger Rook", prize=30, winFlag="ranger", afterIf="ranger",
+          text="Rook: Halt! I'm Ranger Rook, keeper of the shrink stump.|Rook: Only trainers who "
+               "can beat me get to go small. Ready?",
+          win="Rook: Well battled! The stump is yours to use. Thimblewick is waiting below.",
+          after="Rook: Step onto the stump and let your hat do the rest. Good luck down there!")
+    m.obj("npc", 22, 18, npc="tobi", dir="up", sight="4", team="ant:6,rival:7", trainer="Tobi",
+          prize=25, winFlag="tobi2", afterIf="tobi2", hideIf="!tobi1",
+          text="Tobi: Pip! I've been training all morning. And I caught a new critter!|Tobi: "
+               "This time I'll win for sure!",
+          win="Tobi: Argh! How are you so good at this?",
+          after="Tobi: I'm going home to rest my team. Grandpa Bram will be so proud of you...")
+    m.obj("trigger", 4, 11, 1, 4, requires="got_starter",
+          text="Capo: The Rootwood! Wild critters love this tall grass.|Capo: Battle them to "
+               "wear them down. When they're weak, choose CAP and I'll do the rest!")
     m.obj("sign", 35, 9, text="The old shrink stump.\nLocals say it hums at night.")
-    m.obj("sign", 23, 21, text="Fishing pond. Swimming is not allowed. (Nobody can swim anyway.)")
-
-    for (ex, ey) in ((9, 11), (15, 12), (25, 15), (31, 21), (18, 10), (40, 22)):
-        m.obj("enemy", ex, ey, kind="blob", color="g")
-    for (ex, ey) in ((27, 7), (36, 19)):
-        m.obj("enemy", ex, ey, kind="pod")
-    for (ex, ey) in ((20, 26), (40, 25), (32, 9)):
-        m.obj("enemy", ex, ey, kind="beetle")
+    m.obj("sign", 23, 21, text="Fishing pond. Drizzlets have been seen hopping in the shallows.")
+    m.obj("sign", 5, 11, text="Hold X to run. Wild critters can't catch you on the trail!")
 
     for (bx, by) in ((5, 19), (6, 19), (7, 19), (5, 20), (30, 8), (31, 8), (32, 8), (33, 8),
-                     (43, 20), (44, 20), (43, 21), (44, 21), (16, 14), (17, 14), (25, 9),
+                     (43, 20), (44, 20), (43, 21), (44, 21), (16, 18), (17, 18), (25, 9),
                      (26, 9), (12, 28), (13, 28), (35, 28), (36, 28), (2, 18), (3, 18),
                      (38, 9), (39, 9)):
         m.obj("bush", bx, by)
-    m.obj("chest", 3, 21, item="gems20")
+    m.obj("chest", 3, 21, item="caps5")
+    m.obj("chest", 44, 22, item="gems20")
     return m
 
 
@@ -332,7 +375,9 @@ def build_woods():
 # Thimblewick (the tiny world)
 # =============================================================================================
 def build_tiny():
-    m = MapBuilder("tiny", 40, 26, soil_base, "Thimblewick", "tiny", seed=37)
+    m = MapBuilder("tiny", 40, 26, soil_base, "Thimblewick", "tiny", seed=37,
+                   encounters="ant:7-9:30,blob_b:7-9:25,beetle:8-10:20,bat:7-9:15,pod:8-9:10",
+                   heal="thim")
     for x in range(0, 40):
         m.set(x, 0, "root_wall")
         m.set(x, 1, "root_wall_b")
@@ -355,26 +400,34 @@ def build_tiny():
     m.stamp2x2("pebble", 32, 18)
     m.stamp2x2("pebble", 24, 9)
     m.pond(20, 18, 6, 4)
+    # Moss beds, the tiny world's tall grass.
+    m.grass(27, 15, 11, 7, "moss")
+    m.grass(1, 8, 6, 4, "moss")
+    m.grass(14, 8, 9, 4, "moss")
+    m.grass(28, 8, 10, 4, "moss")
+    m.grass(1, 2, 8, 3, "moss")
+    m.grass(24, 2, 5, 3, "moss")
 
     m.spawn("portal", 6, 21, "right")
     m.spawn("hollow", 19.5, 3, "down")
+    m.spawn("thim", 10, 21, "up")
     m.obj("portal", 2.5, 20.5, 2, 1.25, map="woods", spawn="stump")
     m.obj("warp", 19, 1, 2, 1, map="dungeon", spawn="entrance")
-    m.obj("npc", 10, 19, npc="thim",
-          text="Thimbling: Oh my! A big-folk, made small! Welcome to Thimblewick.|Thimbling: The "
-               "beetles have taken Root Hollow, and their master swallowed the Sunstone's light!|"
-               "Thimbling: The hollow is to the north. Mind the ants - they bite!")
-    m.obj("npc", 6, 16, npc="thim2",
-          text="Thimbling: When you want to be big again, stand on the leaf portal and ask your "
-               "hat.|Capo: Ask nicely, please.")
+    m.obj("npc", 10, 19, npc="thim", heal="true", shop="true", healSpawn="thim",
+          text="Thimbling: Oh my! A big-folk, made small! Welcome to Thimblewick.|Thimbling: Your "
+               "critters look tired. Let me fix them right up...")
+    m.obj("npc", 22, 15, npc="thim2", dir="down", sight="3", team="blob_b:9,bat:9,ant:10",
+          trainer="Pipkin", prize=40, winFlag="pipkin", afterIf="pipkin",
+          text="Pipkin: Halt, giant! I'm the best trainer in all of Thimblewick!|Pipkin: Small "
+               "critters, big hearts. Let's go!",
+          win="Pipkin: You're... you're really good! The master of Root Hollow is up north. It "
+              "swallowed the Sunstone's light!",
+          after="Pipkin: Bramblord is huge, but caps work on big critters too. Bring plenty!")
     m.obj("sign", 24, 16, text="Dew Pond.\nFresh this morning!")
+    m.obj("sign", 18, 4, text="ROOT HOLLOW\nHome of Bramblord, master of the critters.")
     m.obj("trigger", 18, 10, 4, 2,
           text="Capo: Look at the size of that grass! Or... the size of us.|Capo: That dark "
-               "hollow up north must be Root Hollow. Let's go!")
-    for (ex, ey) in ((14, 16), (28, 20), (33, 10), (22, 4), (5, 9)):
-        m.obj("enemy", ex, ey, kind="ant")
-    for (ex, ey) in ((11, 9), (34, 15)):
-        m.obj("enemy", ex, ey, kind="blob", color="b")
+               "hollow up north must be Root Hollow. Bramblord lives there!")
     for (bx, by) in ((3, 4), (4, 4), (36, 9), (36, 10), (12, 21), (29, 22)):
         m.obj("pot", bx, by)
     return m
@@ -388,7 +441,8 @@ RW, RH = 15, 10
 
 def build_dungeon():
     m = MapBuilder("dungeon", RW * 3, RH * 3, lambda x, y, r: "dwall_c", "Root Hollow", "dungeon",
-                   rooms=True, seed=51)
+                   rooms=True, seed=51, wild="everywhere",
+                   encounters="bat:9-11:35,beetle:10-12:25,blob_r:9-11:25,ant:10-12:15")
     active = [(1, 2), (0, 1), (1, 1), (2, 1), (0, 0), (1, 0), (2, 0)]
     for (c, r) in active:
         ox, oy = c * RW, r * RH
@@ -427,13 +481,12 @@ def build_dungeon():
         return c * RW + x, r * RH + y
 
     # Connections.
-    link_ns(1, 2, "shutter")          # entrance <-> hub
-    link_ew(0, 1, "shutter")          # west <-> hub
+    link_ns(1, 2)                     # entrance <-> hub
+    link_ew(0, 1)                     # west <-> hub
     link_ew(1, 1, "locked")           # hub <-> east
-    link_ns(1, 1, "boss")             # hub <-> boss
-    link_ns(1, 1, "shutter")          # boss room locks while the boss lives
+    link_ns(1, 1, "boss")             # hub <-> master's chamber
     link_ns(0, 1)                     # west <-> north-west
-    link_ns(2, 1, "shutter")          # east <-> north-east
+    link_ns(2, 1)                     # east <-> north-east
     # Exit at the bottom of the entrance room.
     ex, ey = at(1, 2, 7, 9)
     m.set(ex, ey, "dfloor")
@@ -445,20 +498,20 @@ def build_dungeon():
     m.spawn("entrance", *at(1, 2, 7, 7), direction="up")
     m.obj("torch", *at(1, 2, 3, 2))
     m.obj("torch", *at(1, 2, 11, 2))
-    m.obj("pot", *at(1, 2, 1, 8), drop="heart")
+    m.obj("pot", *at(1, 2, 1, 8), drop="cap")
     m.obj("pot", *at(1, 2, 13, 8), drop="gem_b")
-    m.obj("pot", *at(1, 2, 13, 1))
+    m.obj("pot", *at(1, 2, 13, 1), drop="cap")
     m.obj("sign", *at(1, 2, 5, 5),
-          text="ROOT HOLLOW\nThe Bramble Beetle sleeps within.\nTurn back, small one!")
+          text="ROOT HOLLOW\nBramblord sleeps within.\nTurn back, small one!")
     m.obj("trigger", *at(1, 2, 6, 4), 3, 1,
-          text="Capo: Brr, it's damp in here.|Capo: Doors that won't budge usually need a key... or "
-               "a clever switch. Let's look around!")
+          text="Capo: Brr, it's damp in here. Critters can jump out anywhere in a cave!|Capo: "
+               "Doors that won't budge usually need a key... or a clever switch.")
 
     # -- hub (1,1)
     for (x, y) in ((2, 2), (12, 2), (2, 7), (12, 7)):
         m.set(*at(1, 1, x, y), "dstatue")
-    for (x, y) in ((4, 3), (10, 3), (4, 6), (10, 6)):
-        m.obj("enemy", *at(1, 1, x, y), kind="blob", color="r")
+    m.obj("pot", *at(1, 1, 4, 3), drop="cap")
+    m.obj("pot", *at(1, 1, 10, 6))
 
     # -- west (0,1): push the block onto the heavy switch
     m.set(*at(0, 1, 2, 2), "dstatue")
@@ -469,28 +522,20 @@ def build_dungeon():
     m.obj("chest", *at(0, 1, 10, 7), item="key", showIf="w_switch")
     m.obj("sign", *at(0, 1, 9, 4),
           text="A heavy switch. Something bigger than you will have to sit on it.")
-    m.obj("enemy", *at(0, 1, 12, 1), kind="pod")
-    m.obj("enemy", *at(0, 1, 2, 7), kind="pod")
 
     # -- north-west (0,0): optional treasure room
-    m.obj("pot", *at(0, 0, 1, 1), drop="heart")
+    m.obj("pot", *at(0, 0, 1, 1), drop="cap")
     m.obj("pot", *at(0, 0, 13, 1), drop="gem_b")
-    m.obj("pot", *at(0, 0, 1, 8), drop="heart")
+    m.obj("pot", *at(0, 0, 1, 8), drop="cap")
     m.obj("pot", *at(0, 0, 13, 8), drop="gem_r")
-    m.obj("chest", *at(0, 0, 7, 3), item="gems50")
+    m.obj("chest", *at(0, 0, 7, 3), item="caps10")
     for (x, y) in ((5, 3), (9, 3), (5, 6), (9, 6)):
         m.set(*at(0, 0, x, y), "dstatue")
-    m.obj("enemy", *at(0, 0, 4, 5), kind="bat")
-    m.obj("enemy", *at(0, 0, 10, 4), kind="bat")
 
-    # -- east (2,1): fight room
+    # -- east (2,1)
     for (x, y) in ((4, 3), (10, 6)):
         m.set(*at(2, 1, x, y), "dstatue")
-    m.obj("enemy", *at(2, 1, 3, 6), kind="beetle")
-    m.obj("enemy", *at(2, 1, 11, 3), kind="beetle")
-    m.obj("enemy", *at(2, 1, 7, 5), kind="blob", color="r")
-    m.obj("enemy", *at(2, 1, 12, 7), kind="pod")
-    m.obj("enemy", *at(2, 1, 7, 2), kind="bat")
+    m.obj("chest", *at(2, 1, 12, 7), item="gems50")
 
     # -- north-east (2,0): two blocks onto two switches
     for sx, flag in ((4, "ne_s1"), (10, "ne_s2")):
@@ -498,19 +543,19 @@ def build_dungeon():
         m.obj("switch", *at(2, 0, sx, 3), heavy="true", target=flag)
         m.obj("block", *at(2, 0, sx, 6), lock=flag)
     m.obj("chest", *at(2, 0, 7, 2), item="bigkey", showIf="ne_s1&ne_s2")
-    m.obj("enemy", *at(2, 0, 7, 6), kind="bat")
     m.obj("sign", *at(2, 0, 1, 7), text="Two heavy switches. Two heavy blocks. Coincidence?")
 
-    # -- boss (1,0)
+    # -- master's chamber (1,0)
     m.obj("torch", *at(1, 0, 1, 1))
     m.obj("torch", *at(1, 0, 13, 1))
-    m.obj("enemy", *at(1, 0, 7, 4), kind="boss")
-    m.obj("pickup", *at(1, 0, 7, 2), item="sunstone", showIf="boss_dead")
-    m.obj("trigger", *at(1, 0, 6, 7), 3, 1, requires="!boss_dead",
-          text="Capo: That's the Bramble Beetle! Its shell is too tough for your sword...|Capo: "
-               "Make it charge into a wall. When it's flipped over, strike its belly!")
+    m.obj("legend", *at(1, 0, 7, 4), critter="boss:15", caughtFlag="legend_caught",
+          text="Capo: That's Bramblord, master of Root Hollow! It's waking up...|Capo: It won't "
+               "run away, and neither will we. Wear it down, then throw caps!")
+    m.obj("pickup", *at(1, 0, 7, 2), item="sunstone", showIf="legend_caught")
+    m.obj("trigger", *at(1, 0, 6, 7), 3, 1, requires="!legend_caught",
+          text="Capo: Shh... it's sleeping. That's the biggest critter I've ever seen!|Capo: Check "
+               "your team with Enter before you wake it. Mira's caps are our best friend now.")
     return m
-
 
 def write_tsj(out_dir, tileset):
     tiles = []

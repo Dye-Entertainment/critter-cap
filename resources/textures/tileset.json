@@ -56,6 +56,8 @@
   "log_l": 67,
   "log_m": 68,
   "log_r": 69,
+  "moss": 121,
+  "moss2": 122,
   "pebble_bl": 96,
   "pebble_br": 97,
   "pebble_tl": 94,
@@ -81,6 +83,8 @@
   "stump_br": 66,
   "stump_tl": 63,
   "stump_tr": 64,
+  "tallgrass": 119,
+  "tallgrass2": 120,
   "tree_bl": 58,
   "tree_br": 59,
   "tree_tl": 56,
@@ -161,6 +165,18 @@
   },
   "116": {
    "solid": true
+  },
+  "119": {
+   "grass": true
+  },
+  "120": {
+   "grass": true
+  },
+  "121": {
+   "grass": true
+  },
+  "122": {
+   "grass": true
   },
   "23": {
    "anim": 39,
@@ -409,7 +425,7 @@
    "solid": true
   }
  },
- "tilecount": 119,
+ "tilecount": 123,
  "tileheight": 16,
  "tilewidth": 16
 }

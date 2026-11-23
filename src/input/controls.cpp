@@ -8,7 +8,7 @@
 #include <initializer_list>
 #include "compiled/warning_on.h"
 
-namespace smallcap
+namespace crittercap
 {
 namespace
 {
@@ -73,22 +73,22 @@ void PollControls(Controls &controls)
     Update(controls.right, AnyKey(keyboard, {Key::Right, Key::D}) || AnyPad(pad, {Pad::DpadRight}));
     Update(controls.up, AnyKey(keyboard, {Key::Up, Key::W}) || AnyPad(pad, {Pad::DpadTop}));
     Update(controls.down, AnyKey(keyboard, {Key::Down, Key::S}) || AnyPad(pad, {Pad::DpadBottom}));
-    Update(controls.sword, AnyKey(keyboard, {Key::Z, Key::J, Key::Space}) || AnyPad(pad, {Pad::SouthButton}));
-    Update(controls.action, AnyKey(keyboard, {Key::X, Key::K}) || AnyPad(pad, {Pad::EastButton}));
+    Update(controls.a, AnyKey(keyboard, {Key::Z, Key::J, Key::Space}) || AnyPad(pad, {Pad::SouthButton}));
     Update(
-        controls.roll,
-        AnyKey(keyboard, {Key::C, Key::L, Key::LShift, Key::RShift}) || AnyPad(pad, {Pad::WestButton})
+        controls.b,
+        AnyKey(keyboard, {Key::X, Key::K, Key::C, Key::L, Key::LShift, Key::RShift, Key::Backspace}) ||
+            AnyPad(pad, {Pad::EastButton, Pad::WestButton})
     );
     Update(controls.start, AnyKey(keyboard, {Key::Enter, Key::P}) || AnyPad(pad, {Pad::Start}));
 }
 
 void ConsumePresses(Controls &controls)
 {
-    for (Button *b : {&controls.left, &controls.right, &controls.up, &controls.down, &controls.sword,
-                      &controls.action, &controls.roll, &controls.start})
+    for (Button *b : {&controls.left, &controls.right, &controls.up, &controls.down, &controls.a,
+                      &controls.b, &controls.start})
     {
         b->pressed = false;
         b->released = false;
     }
 }
-} // namespace smallcap
+} // namespace crittercap

@@ -1,6 +1,7 @@
 #include "game/world.h"
 
 #include "audio/sound.h"
+#include "game/text.h"
 #include "utils/logger.h"
 
 #include "compiled/warning_off.h"
@@ -9,7 +10,7 @@
 #include <sstream>
 #include "compiled/warning_on.h"
 
-namespace smallcap
+namespace crittercap
 {
 namespace
 {
@@ -17,10 +18,12 @@ constexpr Float ROOM_W = SCREEN_W;
 constexpr Float ROOM_H = SCREEN_H;
 constexpr Float PLAYER_HW = 5.0f;
 constexpr Float PLAYER_H = 8.0f;
-constexpr Float SWING_TIME = 0.22f;
-constexpr Float SPIN_TIME = 0.45f;
-constexpr Float CHARGE_TIME = 0.7f;
-constexpr Float ROLL_TIME = 0.3f;
+constexpr Float WALK_SPEED = 1.1f;
+constexpr Float RUN_SPEED = 1.9f;
+constexpr size_t TRAIL_LENGTH = 64;
+// Chance per new tile stepped on.
+constexpr Float GRASS_ENCOUNTER = 0.11f;
+constexpr Float CAVE_ENCOUNTER = 0.045f;
 
 struct Box
 {
@@ -42,29 +45,6 @@ Bool Overlaps(const Box &a, const Box &b)
     return a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
 }
 
-std::vector<std::string> SplitPages(const std::string &text)
-{
-    std::vector<std::string> pages;
-    std::string current;
-    for (const char c : text)
-    {
-        if (c == '|')
-        {
-            pages.push_back(current);
-            current.clear();
-        }
-        else
-        {
-            current += c;
-        }
-    }
-    if (!current.empty())
-    {
-        pages.push_back(current);
-    }
-    return pages;
-}
-
 Bool BlocksMovement(const Entity &e)
 {
     if (!e.alive || e.hidden)
@@ -80,6 +60,7 @@ Bool BlocksMovement(const Entity &e)
     case Kind::NPC:
     case Kind::BLOCK:
     case Kind::TORCH:
+    case Kind::LEGEND:
         return true;
     case Kind::DOOR:
         return e.state == 0;
@@ -88,44 +69,45 @@ Bool BlocksMovement(const Entity &e)
     }
 }
 
-Kind KindFromEnemyName(const std::string &name)
+void SpawnDrop(World &world, const Float x, const Float y)
 {
-    if (name == "pod")
-        return Kind::POD;
-    if (name == "beetle")
-        return Kind::BEETLE;
-    if (name == "bat")
-        return Kind::BAT;
-    if (name == "ant")
-        return Kind::ANT;
-    if (name == "boss")
-        return Kind::BOSS;
-    return Kind::BLOB;
-}
-
-Int32 EnemyHp(const Kind kind, const std::string &variant)
-{
-    switch (kind)
+    const Float r = world.rng.NextUnit();
+    std::string variant;
+    Int32 value = 1;
+    if (r < 0.3f)
     {
-    case Kind::BLOB:
-        return variant == "r" ? 3 : 2;
-    case Kind::POD:
-        return 2;
-    case Kind::BEETLE:
-        return 3;
-    case Kind::BAT:
-    case Kind::ANT:
-        return 1;
-    case Kind::BOSS:
-        return 10;
-    default:
-        return 1;
+        variant = "gem_g";
     }
+    else if (r < 0.42f)
+    {
+        variant = "gem_b";
+        value = 5;
+    }
+    else if (r < 0.55f)
+    {
+        variant = "cap";
+    }
+    if (variant.empty())
+    {
+        return;
+    }
+    Entity e;
+    e.kind = Kind::PICKUP;
+    e.variant = variant;
+    e.value = value;
+    e.x = x;
+    e.y = y;
+    e.hw = 4.0f;
+    e.hh = 4.0f;
+    e.vz = 2.2f;
+    e.life = 9.0f;
+    world.spawned.push_back(e);
 }
 
 void CutBush(World &world, Entity &e)
 {
     e.alive = false;
+    world.flags.insert(e.flag);
     const Float ex = e.x;
     const Float ey = e.y;
     PlaySfx(Sfx::CUT, 0.8f, world.rng.NextRange(0.9f, 1.1f));
@@ -142,6 +124,7 @@ void CutBush(World &world, Entity &e)
 void BreakPot(World &world, Entity &e)
 {
     e.alive = false;
+    world.flags.insert(e.flag);
     PlaySfx(Sfx::POT, 0.9f, world.rng.NextRange(0.9f, 1.1f));
     for (Int32 i = 0; i < 5; ++i)
     {
@@ -167,82 +150,6 @@ void BreakPot(World &world, Entity &e)
     else
     {
         SpawnDrop(world, e.x, e.y - 2.0f);
-    }
-}
-
-void SwordHits(World &world, const Box &box, const Int32 damage, const Int32 stamp)
-{
-    Player &p = world.player;
-    const size_t count = world.entities.size();
-    for (size_t i = 0; i < count; ++i)
-    {
-        Entity &e = world.entities[i];
-        if (!e.alive || e.hidden || e.hitStamp == stamp)
-        {
-            continue;
-        }
-        Box target = EntityBox(e);
-        target.y0 -= e.z;
-        target.y1 -= e.z;
-        if (!Overlaps(box, target))
-        {
-            continue;
-        }
-        switch (e.kind)
-        {
-        case Kind::BUSH:
-            e.hitStamp = stamp;
-            CutBush(world, world.entities[i]);
-            break;
-        case Kind::POT:
-            e.hitStamp = stamp;
-            BreakPot(world, world.entities[i]);
-            break;
-        case Kind::SEED:
-            e.hitStamp = stamp;
-            e.alive = false;
-            SpawnEffect(world, "hit", e.x, e.y - 3.0f, 0.12f);
-            PlaySfx(Sfx::BOUNCE, 0.7f);
-            break;
-        case Kind::BOSS:
-            e.hitStamp = stamp;
-            if (e.state == 4)
-            {
-                DamageEnemy(world, world.entities[i], damage, p.x, p.y);
-            }
-            else if (e.hurt <= 0.0f)
-            {
-                // The shell is too hard: the sword bounces off.
-                PlaySfx(Sfx::THUD, 0.9f, 1.3f);
-                SpawnEffect(world, "hit", (p.x + e.x) * 0.5f, (p.y + e.y) * 0.5f - 10.0f, 0.12f);
-                p.knockX = p.x < e.x ? -1.0f : 1.0f;
-                p.knockY = 0.0f;
-            }
-            break;
-        default:
-            if (IsEnemy(e.kind))
-            {
-                e.hitStamp = stamp;
-                DamageEnemy(world, world.entities[i], damage, p.x, p.y);
-            }
-            break;
-        }
-    }
-}
-
-Box SwingBox(const Player &p)
-{
-    switch (p.dir)
-    {
-    case Dir::DOWN:
-        return {p.x - 13.0f, p.y - 6.0f, p.x + 13.0f, p.y + 14.0f};
-    case Dir::UP:
-        return {p.x - 13.0f, p.y - 28.0f, p.x + 13.0f, p.y - 8.0f};
-    case Dir::LEFT:
-        return {p.x - 21.0f, p.y - 22.0f, p.x - 2.0f, p.y + 2.0f};
-    case Dir::RIGHT:
-    default:
-        return {p.x + 2.0f, p.y - 22.0f, p.x + 21.0f, p.y + 2.0f};
     }
 }
 
@@ -430,7 +337,7 @@ Entity *FindInteractable(World &world, std::string &prompt)
             const Box zone = EntityBox(e);
             if (p.x > zone.x0 && p.x < zone.x1 && p.y - 4.0f > zone.y0 && p.y - 4.0f < zone.y1)
             {
-                if (e.kind == Kind::STUMP && !world.hasSword)
+                if (e.kind == Kind::STUMP && world.party.empty())
                 {
                     continue;
                 }
@@ -439,7 +346,10 @@ Entity *FindInteractable(World &world, std::string &prompt)
             }
             continue;
         }
-        if (e.kind != Kind::NPC && e.kind != Kind::SIGN && !(e.kind == Kind::CHEST && e.state == 0))
+        const Bool usable = e.kind == Kind::NPC || e.kind == Kind::SIGN || e.kind == Kind::BUSH ||
+                            e.kind == Kind::POT || e.kind == Kind::LEGEND ||
+                            (e.kind == Kind::CHEST && e.state == 0);
+        if (!usable)
         {
             continue;
         }
@@ -456,56 +366,166 @@ Entity *FindInteractable(World &world, std::string &prompt)
         {
             continue;
         }
-        prompt = e.kind == Kind::NPC ? "Talk" : (e.kind == Kind::SIGN ? "Read" : "Open");
+        switch (e.kind)
+        {
+        case Kind::NPC:
+            prompt = "Talk";
+            break;
+        case Kind::SIGN:
+            prompt = "Read";
+            break;
+        case Kind::BUSH:
+            prompt = PartyHasType(world, Type::LEAF) ? "Chomp" : "Look";
+            break;
+        case Kind::POT:
+            prompt = "Lift";
+            break;
+        case Kind::LEGEND:
+            prompt = "Look";
+            break;
+        default:
+            prompt = "Open";
+            break;
+        }
         return &e;
     }
     return nullptr;
 }
 
-void Interact(World &world, Entity &e)
+// Replaces "rival" in a trainer's team with the starter that beats the player's own.
+std::string ResolveTeam(const World &world, const std::string &team)
+{
+    static const Char *RIVAL_FOR[3] = {"blob_r", "blob_g", "blob_b"};
+    std::string out = team;
+    const size_t at = out.find("rival");
+    if (at != std::string::npos)
+    {
+        const Int32 starter = world.starter >= 0 && world.starter < 3 ? world.starter : 0;
+        out.replace(at, 5, RIVAL_FOR[starter]);
+    }
+    return out;
+}
+
+void TalkToNpc(World &world, Entity &e)
 {
     Player &p = world.player;
+    Request &r = world.request;
+    // Turn to face the player.
+    const Float dx = p.x - e.x;
+    const Float dy = p.y - e.y;
+    if (std::abs(dx) > std::abs(dy))
+    {
+        e.dir = dx < 0 ? Dir::LEFT : Dir::RIGHT;
+    }
+    else
+    {
+        e.dir = dy < 0 ? Dir::UP : Dir::DOWN;
+    }
+    r.type = RequestType::DIALOG;
+    const std::string &after_if = e.Prop("afterIf");
+    const Bool after = !after_if.empty() && CheckCondition(world, after_if);
+    r.pages = SplitPages(after ? e.Prop("after") : e.Prop("text"));
+    if (!after)
+    {
+        const std::string &give = e.Prop("give");
+        if (!give.empty() && !HasFlag(world, "got_" + give))
+        {
+            r.afterItem = give;
+        }
+        if (e.Prop("starter") == "true")
+        {
+            r.type = RequestType::STARTER;
+        }
+    }
+    if (e.Prop("heal") == "true")
+    {
+        r.type = RequestType::HEAL;
+        // Healers that also sell caps ask about it afterwards.
+        r.item = e.Prop("shop") == "true" ? "shop" : "";
+        if (!e.Prop("healSpawn").empty())
+        {
+            world.healMap = world.map.name;
+            world.healSpawn = e.Prop("healSpawn");
+        }
+    }
+    else if (e.Prop("shop") == "true")
+    {
+        r.type = RequestType::SHOP;
+    }
+    const std::string &team = e.Prop("team");
+    if (!team.empty() && !after && !world.party.empty())
+    {
+        r.type = RequestType::BATTLE;
+        r.trainer = e.Prop("trainer").empty() ? e.variant : e.Prop("trainer");
+        r.trainerSprite = e.variant;
+        r.team = ResolveTeam(world, team);
+        r.winFlag = e.Prop("winFlag").empty() ? e.flag + ":won" : e.Prop("winFlag");
+        r.winPages = SplitPages(e.Prop("win"));
+        r.prize = e.Prop("prize").empty() ? 20 : std::stoi(e.Prop("prize"));
+    }
+    if (!e.Prop("setFlag").empty())
+    {
+        world.flags.insert(e.Prop("setFlag"));
+    }
+}
+
+void Interact(World &world, Entity &e)
+{
     Request &r = world.request;
     switch (e.kind)
     {
     case Kind::NPC:
-    {
-        // Turn to face the player.
-        const Float dx = p.x - e.x;
-        const Float dy = p.y - e.y;
-        if (std::abs(dx) > std::abs(dy))
-        {
-            e.dir = dx < 0 ? Dir::LEFT : Dir::RIGHT;
-        }
-        else
-        {
-            e.dir = dy < 0 ? Dir::UP : Dir::DOWN;
-        }
-        r.type = RequestType::DIALOG;
-        const std::string &after_if = e.Prop("afterIf");
-        if (!after_if.empty() && CheckCondition(world, after_if))
-        {
-            r.pages = SplitPages(e.Prop("after"));
-        }
-        else
-        {
-            r.pages = SplitPages(e.Prop("text"));
-            const std::string &give = e.Prop("give");
-            if (!give.empty() && !HasFlag(world, "got_" + give))
-            {
-                r.afterItem = give;
-            }
-        }
-        if (!e.Prop("setFlag").empty())
-        {
-            world.flags.insert(e.Prop("setFlag"));
-        }
+        TalkToNpc(world, e);
         break;
-    }
     case Kind::SIGN:
         r.type = RequestType::DIALOG;
         r.pages = SplitPages(e.Prop("text"));
         break;
+    case Kind::BUSH:
+    {
+        const Critter *chomper = nullptr;
+        for (const Critter &c : world.party)
+        {
+            if (c.Def().type == Type::LEAF)
+            {
+                chomper = &c;
+                break;
+            }
+        }
+        if (chomper)
+        {
+            const std::string name = chomper->Name();
+            CutBush(world, e);
+            if (!HasFlag(world, "chomped"))
+            {
+                world.flags.insert("chomped");
+                r.type = RequestType::DIALOG;
+                r.pages = {name + " chomped through the bush! Leafy critters can clear any bush."};
+            }
+        }
+        else
+        {
+            r.type = RequestType::DIALOG;
+            r.pages = {"A thick, leafy bush. A hungry LEAF critter could chew right through it."};
+        }
+        break;
+    }
+    case Kind::POT:
+        BreakPot(world, e);
+        break;
+    case Kind::LEGEND:
+    {
+        Critter wild;
+        if (!ParseCritter(e.Prop("critter"), wild))
+        {
+            break;
+        }
+        r.type = RequestType::BATTLE;
+        r.wild = wild;
+        r.legend = true;
+        r.pages = SplitPages(e.Prop("text"));
+        break;
+    }
     case Kind::CHEST:
         e.state = 1;
         world.flags.insert(e.flag);
@@ -514,6 +534,12 @@ void Interact(World &world, Entity &e)
         r.item = e.Prop("item");
         break;
     case Kind::STUMP:
+        if (!CheckCondition(world, e.Prop("requires")))
+        {
+            r.type = RequestType::DIALOG;
+            r.pages = SplitPages(e.Prop("locked"));
+            break;
+        }
         r.type = RequestType::SHRINK;
         r.map = e.Prop("map");
         r.spawn = e.Prop("spawn");
@@ -533,13 +559,70 @@ void Interact(World &world, Entity &e)
     }
 }
 
+void CheckEncounter(World &world)
+{
+    Player &p = world.player;
+    const auto tx = static_cast<Int32>(std::floor(p.x / TILE));
+    const auto ty = static_cast<Int32>(std::floor((p.y - 2.0f) / TILE));
+    if (tx == p.tileX && ty == p.tileY)
+    {
+        return;
+    }
+    p.tileX = tx;
+    p.tileY = ty;
+    if (world.encounterGrace > 0)
+    {
+        world.encounterGrace--;
+        return;
+    }
+    if (world.peaceful || world.map.encounters.empty() || !PartyCanFight(world) ||
+        world.request.type != RequestType::NONE)
+    {
+        return;
+    }
+    const Bool grass = IsGrassTile(world.map, tx, ty);
+    if (!grass && !world.map.wildEverywhere)
+    {
+        return;
+    }
+    const Float chance = grass ? GRASS_ENCOUNTER : CAVE_ENCOUNTER;
+    if (world.rng.NextUnit() >= chance)
+    {
+        return;
+    }
+    Critter wild;
+    if (!RollEncounter(world.map.encounters, world.rng, wild))
+    {
+        return;
+    }
+    world.request.type = RequestType::BATTLE;
+    world.request.wild = wild;
+    p.moving = false;
+}
+
+void RecordTrail(Player &p)
+{
+    if (!p.trail.empty() && std::abs(p.trail.front().x - p.x) < 0.01f &&
+        std::abs(p.trail.front().y - p.y) < 0.01f)
+    {
+        return;
+    }
+    p.trail.push_front({p.x, p.y, p.dir});
+    if (p.trail.size() > TRAIL_LENGTH)
+    {
+        p.trail.pop_back();
+    }
+}
+
 void UpdatePlayer(World &world, const Controls &c)
 {
     Player &p = world.player;
     p.t += TICK;
-    p.iframes = std::max(0.0f, p.iframes - TICK);
-    p.rollCooldown = std::max(0.0f, p.rollCooldown - TICK);
     p.moving = false;
+    if (p.state != PState::NORMAL)
+    {
+        return;
+    }
 
     Float ix = 0.0f;
     Float iy = 0.0f;
@@ -552,197 +635,52 @@ void UpdatePlayer(World &world, const Controls &c)
     if (c.down.down)
         iy += 1.0f;
 
-    switch (p.state)
+    std::string prompt;
+    Entity *target = FindInteractable(world, prompt);
+    world.prompt = prompt;
+    if (c.a.pressed && target)
     {
-    case PState::NORMAL:
+        Interact(world, *target);
+        return;
+    }
+    if (ix == 0.0f && iy == 0.0f)
     {
-        std::string prompt;
-        Entity *target = FindInteractable(world, prompt);
-        if (!p.charging)
-        {
-            world.prompt = prompt;
-        }
-        if (c.action.pressed && target && !p.charging)
-        {
-            Interact(world, *target);
-            return;
-        }
-        if (c.sword.pressed && world.hasSword && !p.charging)
-        {
-            p.state = PState::SWING;
-            p.t = 0.0f;
-            p.swingStamp++;
-            PlaySfx(Sfx::SWORD, 0.8f, world.rng.NextRange(0.95f, 1.05f));
-            return;
-        }
-        if (c.roll.pressed && p.rollCooldown <= 0.0f && !p.charging)
-        {
-            p.state = PState::ROLL;
-            p.t = 0.0f;
-            if (ix != 0.0f || iy != 0.0f)
-            {
-                const Float len = std::sqrt(ix * ix + iy * iy);
-                p.rollX = ix / len;
-                p.rollY = iy / len;
-                if (std::abs(ix) > 0.0f && iy == 0.0f)
-                    p.dir = ix < 0 ? Dir::LEFT : Dir::RIGHT;
-                if (std::abs(iy) > 0.0f && ix == 0.0f)
-                    p.dir = iy < 0 ? Dir::UP : Dir::DOWN;
-            }
-            else
-            {
-                p.rollX = DirX(p.dir);
-                p.rollY = DirY(p.dir);
-            }
-            PlaySfx(Sfx::ROLL, 0.7f);
-            return;
-        }
-        if (p.charging)
-        {
-            const Float before = p.charge;
-            p.charge += TICK;
-            if (before < CHARGE_TIME && p.charge >= CHARGE_TIME)
-            {
-                PlaySfx(Sfx::CHARGE, 0.8f);
-            }
-            if (!c.sword.down)
-            {
-                p.charging = false;
-                if (p.charge >= CHARGE_TIME)
-                {
-                    p.state = PState::SPIN;
-                    p.t = 0.0f;
-                    p.swingStamp++;
-                    PlaySfx(Sfx::SPIN);
-                    return;
-                }
-            }
-        }
-        if (ix != 0.0f || iy != 0.0f)
-        {
-            if (!p.charging)
-            {
-                if (ix != 0.0f && iy == 0.0f)
-                    p.dir = ix < 0 ? Dir::LEFT : Dir::RIGHT;
-                else if (iy != 0.0f && ix == 0.0f)
-                    p.dir = iy < 0 ? Dir::UP : Dir::DOWN;
-                else
-                {
-                    const Bool keep = (p.dir == Dir::LEFT && ix < 0) || (p.dir == Dir::RIGHT && ix > 0) ||
-                                      (p.dir == Dir::UP && iy < 0) || (p.dir == Dir::DOWN && iy > 0);
-                    if (!keep)
-                        p.dir = ix < 0 ? Dir::LEFT : Dir::RIGHT;
-                }
-            }
-            Float speed = p.charging ? 0.7f : 1.25f;
-            if (ix != 0.0f && iy != 0.0f)
-            {
-                speed *= 0.7071f;
-            }
-            const Bool moved_x = MovePlayerAxis(world, ix * speed, 0.0f);
-            const Bool moved_y = MovePlayerAxis(world, 0.0f, iy * speed);
-            p.moving = true;
-            p.anim += TICK;
-            if (!moved_x || !moved_y)
-            {
-                HandlePush(world, moved_x ? 0.0f : ix, moved_y ? 0.0f : iy);
-            }
-            else
-            {
-                p.pushT = 0.0f;
-            }
-        }
-        else
-        {
-            p.anim = 0.0f;
-            p.pushT = 0.0f;
-        }
-        break;
+        p.anim = 0.0f;
+        p.pushT = 0.0f;
+        p.running = false;
+        return;
     }
-    case PState::SWING:
+    if (ix != 0.0f && iy == 0.0f)
+        p.dir = ix < 0 ? Dir::LEFT : Dir::RIGHT;
+    else if (iy != 0.0f && ix == 0.0f)
+        p.dir = iy < 0 ? Dir::UP : Dir::DOWN;
+    else
     {
-        SwordHits(world, SwingBox(p), 1, p.swingStamp);
-        if (p.knockX != 0.0f)
-        {
-            MovePlayerAxis(world, p.knockX * 1.5f, 0.0f);
-        }
-        if (p.t >= SWING_TIME)
-        {
-            p.knockX = 0.0f;
-            p.state = PState::NORMAL;
-            p.t = 0.0f;
-            if (c.sword.down)
-            {
-                p.charging = true;
-                p.charge = 0.0f;
-            }
-        }
-        break;
+        const Bool keep = (p.dir == Dir::LEFT && ix < 0) || (p.dir == Dir::RIGHT && ix > 0) ||
+                          (p.dir == Dir::UP && iy < 0) || (p.dir == Dir::DOWN && iy > 0);
+        if (!keep)
+            p.dir = ix < 0 ? Dir::LEFT : Dir::RIGHT;
     }
-    case PState::SPIN:
+    p.running = c.b.down;
+    Float speed = p.running ? RUN_SPEED : WALK_SPEED;
+    if (ix != 0.0f && iy != 0.0f)
     {
-        const Box spin{p.x - 24.0f, p.y - 30.0f, p.x + 24.0f, p.y + 16.0f};
-        SwordHits(world, spin, 2, p.swingStamp);
-        if (p.t >= SPIN_TIME)
-        {
-            p.state = PState::NORMAL;
-            p.t = 0.0f;
-            p.knockX = 0.0f;
-        }
-        break;
+        speed *= 0.7071f;
     }
-    case PState::ROLL:
+    const Bool moved_x = MovePlayerAxis(world, ix * speed, 0.0f);
+    const Bool moved_y = MovePlayerAxis(world, 0.0f, iy * speed);
+    p.moving = true;
+    p.anim += TICK * (p.running ? 1.6f : 1.0f);
+    if (!moved_x || !moved_y)
     {
-        const Float speed = 2.3f;
-        const Bool ok_x = MovePlayerAxis(world, p.rollX * speed, 0.0f);
-        const Bool ok_y = MovePlayerAxis(world, 0.0f, p.rollY * speed);
-        p.anim += TICK;
-        const Bool bonk = (!ok_x && p.rollX != 0.0f && p.rollY == 0.0f) ||
-                          (!ok_y && p.rollY != 0.0f && p.rollX == 0.0f);
-        if (bonk)
-        {
-            PlaySfx(Sfx::THUD, 0.7f);
-            world.shake = 0.15f;
-            p.state = PState::HURT;
-            p.t = 0.1f;
-            p.knockX = -p.rollX * 0.6f;
-            p.knockY = -p.rollY * 0.6f;
-            p.rollCooldown = 0.3f;
-            break;
-        }
-        if (p.t >= ROLL_TIME)
-        {
-            p.state = PState::NORMAL;
-            p.t = 0.0f;
-            p.rollCooldown = 0.15f;
-        }
-        break;
+        HandlePush(world, moved_x ? 0.0f : ix, moved_y ? 0.0f : iy);
     }
-    case PState::HURT:
+    else
     {
-        MovePlayerAxis(world, p.knockX * 2.4f, 0.0f);
-        MovePlayerAxis(world, 0.0f, p.knockY * 2.4f);
-        if (p.t >= 0.22f)
-        {
-            p.state = PState::NORMAL;
-            p.t = 0.0f;
-            p.knockX = 0.0f;
-            p.knockY = 0.0f;
-        }
-        break;
+        p.pushT = 0.0f;
     }
-    case PState::DEAD:
-    {
-        if (p.t >= 2.2f && world.request.type == RequestType::NONE)
-        {
-            world.request.type = RequestType::GAME_OVER;
-            p.t = -100.0f;
-        }
-        break;
-    }
-    default:
-        break;
-    }
+    RecordTrail(p);
+    CheckEncounter(world);
 }
 
 void UpdateObjects(World &world)
@@ -769,18 +707,6 @@ void UpdateObjects(World &world)
             continue;
         }
         e.anim += TICK;
-        if (IsEnemy(e.kind) || e.kind == Kind::SEED)
-        {
-            if (world.map.rooms && e.room != player_room)
-            {
-                continue;
-            }
-            if (p.state != PState::DEAD)
-            {
-                UpdateEnemy(world, world.entities[i]);
-            }
-            continue;
-        }
         switch (e.kind)
         {
         case Kind::EFFECT:
@@ -814,8 +740,7 @@ void UpdateObjects(World &world)
                     break;
                 }
             }
-            if (e.z < 6.0f && Overlaps(body, EntityBox(e)) && p.state != PState::DEAD &&
-                world.request.type == RequestType::NONE)
+            if (e.z < 6.0f && Overlaps(body, EntityBox(e)) && world.request.type == RequestType::NONE)
             {
                 const std::string &v = e.variant;
                 if (v.rfind("gem", 0) == 0)
@@ -824,9 +749,9 @@ void UpdateObjects(World &world)
                     PlaySfx(Sfx::GEM, 0.8f);
                     e.alive = false;
                 }
-                else if (v == "heart")
+                else if (v == "cap")
                 {
-                    p.hp = std::min(p.maxHp, p.hp + 2);
+                    world.caps = std::min(99, world.caps + 1);
                     PlaySfx(Sfx::HEART);
                     e.alive = false;
                 }
@@ -891,27 +816,7 @@ void UpdateObjects(World &world)
         {
             if (e.variant == "shutter")
             {
-                Bool closed;
-                const std::string &open_if = e.Prop("openIf");
-                if (!open_if.empty())
-                {
-                    closed = !CheckCondition(world, open_if);
-                }
-                else
-                {
-                    const Box door = EntityBox(e);
-                    Bool touches = false;
-                    if (player_room >= 0)
-                    {
-                        const Int32 cols = world.map.width / 15;
-                        const Float rx = static_cast<Float>(player_room % cols) * ROOM_W;
-                        const Float ry = static_cast<Float>(player_room / cols) * ROOM_H;
-                        touches = door.x0 < rx + ROOM_W && door.x1 > rx && door.y0 < ry + ROOM_H &&
-                                  door.y1 > ry;
-                    }
-                    closed = touches && RoomHasEnemies(world, player_room) &&
-                             !Overlaps(body, door);
-                }
+                const Bool closed = !CheckCondition(world, e.Prop("openIf")) && !Overlaps(body, EntityBox(e));
                 const Int32 new_state = closed ? 0 : 1;
                 if (new_state != e.state && e.timer > 0.0f)
                 {
@@ -924,6 +829,21 @@ void UpdateObjects(World &world)
         }
         case Kind::NPC:
         {
+            // NPCs that step aside once something happened (the guard after you get a partner).
+            const std::string &move_if = e.Prop("moveIf");
+            if (!move_if.empty() && e.value == 0 && world.request.type == RequestType::NONE &&
+                CheckCondition(world, move_if))
+            {
+                const Float nx = std::stof(e.Prop("moveX")) * TILE + 8.0f;
+                const Float ny = std::stof(e.Prop("moveY")) * TILE + 16.0f;
+                if (std::abs(nx - e.x) > 0.5f || std::abs(ny - e.y) > 0.5f)
+                {
+                    SpawnEffect(world, "poof", e.x, e.y - 8.0f, 0.32f);
+                    e.x = nx;
+                    e.y = ny;
+                }
+                e.value = 1;
+            }
             if (e.Prop("wander") == "true")
             {
                 e.timer -= TICK;
@@ -955,6 +875,27 @@ void UpdateObjects(World &world)
                     }
                 }
             }
+            // Trainers who spot the player walk up and challenge them.
+            const std::string &sight = e.Prop("sight");
+            if (!sight.empty() && world.request.type == RequestType::NONE && !world.party.empty() &&
+                !CheckCondition(world, e.Prop("afterIf")))
+            {
+                const Float range = std::stof(sight) * TILE;
+                const Float dx = p.x - e.x;
+                const Float dy = p.y - e.y;
+                const Bool seen = (e.dir == Dir::DOWN && std::abs(dx) < 10.0f && dy > 0 && dy < range) ||
+                                  (e.dir == Dir::UP && std::abs(dx) < 10.0f && dy < 0 && -dy < range) ||
+                                  (e.dir == Dir::LEFT && std::abs(dy) < 10.0f && dx < 0 && -dx < range) ||
+                                  (e.dir == Dir::RIGHT && std::abs(dy) < 10.0f && dx > 0 && dx < range);
+                if (seen)
+                {
+                    SpawnEffect(world, "alert", e.x, e.y - 24.0f, 0.6f);
+                    PlaySfx(Sfx::SECRET, 0.6f);
+                    p.dir = std::abs(dx) > std::abs(dy) ? (dx < 0 ? Dir::RIGHT : Dir::LEFT)
+                                                        : (dy < 0 ? Dir::DOWN : Dir::UP);
+                    TalkToNpc(world, world.entities[i]);
+                }
+            }
             break;
         }
         case Kind::TRIGGER:
@@ -971,8 +912,7 @@ void UpdateObjects(World &world)
         }
         case Kind::WARP:
         {
-            if (world.request.type == RequestType::NONE && Overlaps(body, EntityBox(e)) &&
-                p.state != PState::DEAD)
+            if (world.request.type == RequestType::NONE && Overlaps(body, EntityBox(e)))
             {
                 world.request.type = RequestType::WARP;
                 world.request.map = e.Prop("map");
@@ -984,6 +924,7 @@ void UpdateObjects(World &world)
             break;
         }
     }
+    (void)player_room;
 }
 
 void UpdateRoomScroll(World &world)
@@ -1049,60 +990,11 @@ void StartRoomScrollIfNeeded(World &world)
     s.playerVX = static_cast<Float>(rx - world.roomX) * 28.0f / frames;
     s.playerVY = static_cast<Float>(ry - world.roomY) * 28.0f / frames;
     p.state = PState::NORMAL;
-    p.charging = false;
-    // Effects and projectiles left in the old room vanish.
     for (Entity &e : world.entities)
     {
-        if (e.kind == Kind::SEED || e.kind == Kind::EFFECT)
+        if (e.kind == Kind::EFFECT)
         {
             e.alive = false;
-        }
-    }
-}
-
-void UpdateBossDeath(World &world)
-{
-    if (world.bossDeathTimer < 0.0f)
-    {
-        return;
-    }
-    world.bossDeathTimer += TICK;
-    Entity *boss = nullptr;
-    for (Entity &e : world.entities)
-    {
-        if (e.kind == Kind::BOSS && e.alive)
-        {
-            boss = &e;
-        }
-    }
-    if (boss)
-    {
-        boss->hurt = 0.2f;
-        if (world.tickCount % 8 == 0)
-        {
-            SpawnEffect(world, "poof", boss->x + world.rng.NextRange(-14.0f, 14.0f),
-                        boss->y - 12.0f + world.rng.NextRange(-12.0f, 10.0f), 0.32f);
-            PlaySfx(Sfx::ENEMY_DIE, 0.6f, world.rng.NextRange(0.8f, 1.2f));
-        }
-        if (world.bossDeathTimer > 2.0f)
-        {
-            boss->alive = false;
-            world.flags.insert(boss->flag);
-            world.flags.insert("boss_dead");
-            PlaySfx(Sfx::BOSS_DIE);
-            world.shake = 0.5f;
-            Entity heart;
-            heart.kind = Kind::PICKUP;
-            heart.variant = "heartc";
-            heart.flag = "roothollow:heartc";
-            heart.x = boss->x;
-            heart.y = boss->y;
-            heart.hw = 7.0f;
-            heart.hh = 7.0f;
-            heart.vz = 3.0f;
-            world.spawned.push_back(heart);
-            world.bossDeathTimer = -1.0f;
-            PlayMusic(Music::NONE);
         }
     }
 }
@@ -1142,40 +1034,12 @@ Bool CheckCondition(const World &world, const std::string &condition)
     return true;
 }
 
-Bool IsEnemy(const Kind kind)
-{
-    switch (kind)
-    {
-    case Kind::BLOB:
-    case Kind::POD:
-    case Kind::BEETLE:
-    case Kind::BAT:
-    case Kind::ANT:
-    case Kind::BOSS:
-        return true;
-    default:
-        return false;
-    }
-}
-
 Int32 RoomIndexAt(const World &world, const Float x, const Float y)
 {
     const Int32 cols = std::max(1, world.map.width / 15);
     const auto rx = static_cast<Int32>(std::floor(x / ROOM_W));
     const auto ry = static_cast<Int32>(std::floor(y / ROOM_H));
     return ry * cols + rx;
-}
-
-Bool RoomHasEnemies(const World &world, const Int32 room)
-{
-    for (const Entity &e : world.entities)
-    {
-        if (e.alive && !e.hidden && IsEnemy(e.kind) && e.room == room)
-        {
-            return true;
-        }
-    }
-    return false;
 }
 
 Bool BoxBlocked(
@@ -1206,54 +1070,6 @@ Bool BoxBlocked(
     return false;
 }
 
-Bool MoveActor(World &world, Entity &e, const Float dx, const Float dy)
-{
-    Bool ok = true;
-    const auto try_move = [&](const Float mx, const Float my) {
-        const Float nx = e.x + mx;
-        const Float ny = e.y + my;
-        const Float x0 = nx - e.hw;
-        const Float y0 = ny - e.hh * 2.0f;
-        const Float x1 = nx + e.hw;
-        const Float y1 = ny;
-        if (world.map.rooms && e.room >= 0)
-        {
-            const Int32 cols = std::max(1, world.map.width / 15);
-            const Float rx = static_cast<Float>(e.room % cols) * ROOM_W;
-            const Float ry = static_cast<Float>(e.room / cols) * ROOM_H;
-            if (x0 < rx + TILE || x1 > rx + ROOM_W - TILE || y0 < ry + TILE ||
-                y1 > ry + ROOM_H - TILE)
-            {
-                return false;
-            }
-        }
-        const Bool flying = e.kind == Kind::BAT;
-        if (flying)
-        {
-            if (x0 < 0 || y0 < 0 || x1 > world.map.PixelWidth() || y1 > world.map.PixelHeight())
-            {
-                return false;
-            }
-        }
-        else if (BoxBlocked(world, x0, y0, x1, y1, &e, false))
-        {
-            return false;
-        }
-        e.x = nx;
-        e.y = ny;
-        return true;
-    };
-    if (dx != 0.0f && !try_move(dx, 0.0f))
-    {
-        ok = false;
-    }
-    if (dy != 0.0f && !try_move(0.0f, dy))
-    {
-        ok = false;
-    }
-    return ok;
-}
-
 Entity &SpawnEffect(World &world, const std::string &sprite, const Float x, const Float y,
                     const Float duration)
 {
@@ -1269,134 +1085,69 @@ Entity &SpawnEffect(World &world, const std::string &sprite, const Float x, cons
     return world.spawned.back();
 }
 
-void SpawnDrop(World &world, const Float x, const Float y)
+Bool AddCritter(World &world, const Critter &critter)
 {
-    const Float r = world.rng.NextUnit();
-    std::string variant;
-    Int32 value = 1;
-    if (r < 0.28f)
+    world.seen[static_cast<size_t>(critter.species)] = true;
+    world.caught[static_cast<size_t>(critter.species)] = true;
+    if (world.party.size() < PARTY_SIZE)
     {
-        variant = "gem_g";
+        world.party.push_back(critter);
+        return true;
     }
-    else if (r < 0.36f)
-    {
-        variant = "gem_b";
-        value = 5;
-    }
-    else if (r < 0.52f && world.player.hp < world.player.maxHp)
-    {
-        variant = "heart";
-    }
-    if (variant.empty())
-    {
-        return;
-    }
-    Entity e;
-    e.kind = Kind::PICKUP;
-    e.variant = variant;
-    e.value = value;
-    e.x = x;
-    e.y = y;
-    e.hw = 4.0f;
-    e.hh = 4.0f;
-    e.vz = 2.2f;
-    e.life = 9.0f;
-    world.spawned.push_back(e);
+    world.box.push_back(critter);
+    return false;
 }
 
-void DamageEnemy(World &world, Entity &e, const Int32 damage, const Float from_x, const Float from_y)
+void HealParty(World &world)
 {
-    if (e.hurt > 0.0f || !e.alive)
+    for (Critter &c : world.party)
     {
-        return;
+        c.hp = c.MaxHp();
     }
-    e.hp -= damage;
-    e.hurt = 0.35f;
-    Float dx = e.x - from_x;
-    Float dy = (e.y - e.hh) - (from_y - 4.0f);
-    const Float len = std::max(0.01f, std::sqrt(dx * dx + dy * dy));
-    const Float knock = e.kind == Kind::BOSS ? 0.0f : 2.2f;
-    e.knockX = dx / len * knock;
-    e.knockY = dy / len * knock;
-    e.knockT = 0.18f;
-    SpawnEffect(world, "hit", e.x, e.y - e.hh - e.z, 0.12f);
-    if (e.kind == Kind::BOSS)
+    for (Critter &c : world.box)
     {
-        PlaySfx(Sfx::BOSS_HIT);
-        world.shake = 0.15f;
-        e.value++;
-        if (e.hp <= 0)
-        {
-            e.hp = 0;
-            e.state = 9;
-            world.bossDeathTimer = 0.0f;
-            PlaySfx(Sfx::BOSS_ROAR);
-        }
-        return;
-    }
-    PlaySfx(Sfx::HIT, 0.9f, world.rng.NextRange(0.95f, 1.1f));
-    if (e.hp <= 0)
-    {
-        e.alive = false;
-        SpawnEffect(world, "poof", e.x, e.y - e.hh - e.z, 0.32f);
-        PlaySfx(Sfx::ENEMY_DIE, 0.8f);
-        if (world.map.rooms && !e.flag.empty())
-        {
-            world.flags.insert(e.flag);
-        }
-        SpawnDrop(world, e.x, e.y);
+        c.hp = c.MaxHp();
     }
 }
 
-void HurtPlayer(World &world, const Int32 damage, const Float from_x, const Float from_y)
+Bool PartyCanFight(const World &world)
 {
-    Player &p = world.player;
-    if (p.iframes > 0.0f || p.state == PState::DEAD || p.state == PState::HOLD ||
-        p.state == PState::SHRINK || p.state == PState::GROW || world.scroll.active)
+    for (const Critter &c : world.party)
     {
-        return;
+        if (!c.Fainted())
+        {
+            return true;
+        }
     }
-    p.hp -= damage;
-    p.iframes = 1.1f;
-    p.charging = false;
-    Float dx = p.x - from_x;
-    Float dy = p.y - from_y;
-    const Float len = std::sqrt(dx * dx + dy * dy);
-    if (len < 0.01f)
+    return false;
+}
+
+Bool PartyHasType(const World &world, const Type type)
+{
+    for (const Critter &c : world.party)
     {
-        dx = -DirX(p.dir);
-        dy = -DirY(p.dir);
+        if (c.Def().type == type)
+        {
+            return true;
+        }
     }
-    else
+    return false;
+}
+
+Int32 CaughtCount(const World &world)
+{
+    Int32 count = 0;
+    for (const Bool c : world.caught)
     {
-        dx /= len;
-        dy /= len;
+        count += c ? 1 : 0;
     }
-    p.knockX = dx;
-    p.knockY = dy;
-    if (p.hp <= 0)
-    {
-        p.hp = 0;
-        p.state = PState::DEAD;
-        p.t = 0.0f;
-        PlaySfx(Sfx::DIE);
-        PlayMusic(Music::NONE);
-        return;
-    }
-    p.state = PState::HURT;
-    p.t = 0.0f;
-    PlaySfx(Sfx::HURT);
+    return count;
 }
 
 void ApplyItem(World &world, const std::string &item)
 {
-    Player &p = world.player;
     world.flags.insert("got_" + item);
-    if (item == "sword")
-    {
-        world.hasSword = true;
-    }
-    else if (item == "key")
+    if (item == "key")
     {
         world.keys++;
     }
@@ -1404,22 +1155,13 @@ void ApplyItem(World &world, const std::string &item)
     {
         world.bigKey = true;
     }
-    else if (item == "heartc")
+    else if (item.rfind("caps", 0) == 0)
     {
-        p.maxHp += 2;
-        p.hp = p.maxHp;
+        world.caps = std::min(99, world.caps + std::atoi(item.c_str() + 4));
     }
-    else if (item == "gems20")
+    else if (item.rfind("gems", 0) == 0)
     {
-        world.gems = std::min(999, world.gems + 20);
-    }
-    else if (item == "gems50")
-    {
-        world.gems = std::min(999, world.gems + 50);
-    }
-    else if (item == "heart")
-    {
-        p.hp = p.maxHp;
+        world.gems = std::min(999, world.gems + std::atoi(item.c_str() + 4));
     }
 }
 
@@ -1454,7 +1196,6 @@ void EnterMap(World &world, const std::string &map_name, const std::string &spaw
     world.entities.clear();
     world.spawned.clear();
     world.scroll.active = false;
-    world.bossDeathTimer = -1.0f;
     world.spawnMap = map_name;
     world.spawnName = spawn;
     for (const MapObject &o : world.map.objects)
@@ -1478,7 +1219,14 @@ void EnterMap(World &world, const std::string &map_name, const std::string &spaw
         }
         const std::string &t = o.type;
         if (t == "bush")
+        {
+            // Chomped bushes grow back when you leave, except the ones that guard something.
+            if (o.Prop("stay") == "true" && HasFlag(world, e.flag))
+            {
+                continue;
+            }
             e.kind = Kind::BUSH;
+        }
         else if (t == "pot")
             e.kind = Kind::POT;
         else if (t == "chest")
@@ -1509,34 +1257,24 @@ void EnterMap(World &world, const std::string &map_name, const std::string &spaw
             e.variant = o.Prop("npc");
             e.hw = 6.0f;
             e.hh = 5.0f;
+            const std::string &facing = o.Prop("dir");
+            e.dir = facing == "up" ? Dir::UP
+                                   : (facing == "left" ? Dir::LEFT : (facing == "right" ? Dir::RIGHT : Dir::DOWN));
             if (!o.Prop("moveIf").empty() && CheckCondition(world, o.Prop("moveIf")))
             {
                 e.x = std::stof(o.Prop("moveX")) * TILE + 8.0f;
                 e.y = std::stof(o.Prop("moveY")) * TILE + 16.0f;
             }
         }
-        else if (t == "enemy")
+        else if (t == "legend")
         {
-            if (world.peaceful && o.Prop("kind") != "boss")
+            if (HasFlag(world, o.Prop("caughtFlag")))
             {
                 continue;
             }
-            if (world.map.rooms && HasFlag(world, e.flag))
-            {
-                continue;
-            }
-            e.kind = KindFromEnemyName(o.Prop("kind"));
-            e.variant = o.Prop("color").empty() ? "g" : o.Prop("color");
-            e.hp = EnemyHp(e.kind, e.variant);
-            e.hw = e.kind == Kind::BOSS ? 12.0f : 6.0f;
-            e.hh = e.kind == Kind::BOSS ? 9.0f : 5.0f;
-            e.timer = world.rng.NextRange(0.2f, 1.2f);
-            e.dir = static_cast<Dir>(world.rng.NextInt(0, 3));
-            if (e.kind == Kind::BOSS)
-            {
-                e.dir = Dir::DOWN;
-                e.timer = 1.5f;
-            }
+            e.kind = Kind::LEGEND;
+            e.hw = 12.0f;
+            e.hh = 9.0f;
         }
         else if (t == "door")
         {
@@ -1588,9 +1326,11 @@ void EnterMap(World &world, const std::string &map_name, const std::string &spaw
     Player &p = world.player;
     p.state = PState::NORMAL;
     p.t = 0.0f;
-    p.charging = false;
     p.scale = 1.0f;
-    p.knockX = p.knockY = 0.0f;
+    p.trail.clear();
+    p.tileX = static_cast<Int32>(std::floor(p.x / TILE));
+    p.tileY = static_cast<Int32>(std::floor((p.y - 2.0f) / TILE));
+    world.encounterGrace = 3;
     if (world.map.rooms)
     {
         world.roomX = static_cast<Int32>(std::floor(p.x / ROOM_W));
@@ -1626,11 +1366,11 @@ void UpdateWorld(World &world, const Controls &controls)
     if (world.scroll.active)
     {
         UpdateRoomScroll(world);
+        RecordTrail(world.player);
         return;
     }
     UpdatePlayer(world, controls);
     UpdateObjects(world);
-    UpdateBossDeath(world);
     for (Entity &e : world.spawned)
     {
         world.entities.push_back(std::move(e));
@@ -1644,4 +1384,4 @@ void UpdateWorld(World &world, const Controls &controls)
     StartRoomScrollIfNeeded(world);
     UpdateCamera(world, false);
 }
-} // namespace smallcap
+} // namespace crittercap

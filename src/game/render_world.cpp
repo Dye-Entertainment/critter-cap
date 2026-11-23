@@ -7,37 +7,10 @@
 #include <string>
 #include "compiled/warning_on.h"
 
-namespace smallcap
+namespace crittercap
 {
 namespace
 {
-enum class Ori : UInt8
-{
-    R,
-    DR,
-    D,
-    DL,
-    L,
-    UL,
-    U,
-    UR
-};
-
-struct SwordPose
-{
-    Ori ori;
-    Float ox;
-    Float oy;
-};
-
-// Hilt positions relative to the player's feet for the three swing phases.
-const SwordPose SWING[4][3] = {
-    /* DOWN  */ {{Ori::R, 5, -9}, {Ori::DR, 4, -7}, {Ori::D, 1, -6}},
-    /* UP    */ {{Ori::L, -5, -12}, {Ori::UL, -4, -14}, {Ori::U, -1, -15}},
-    /* LEFT  */ {{Ori::U, -3, -15}, {Ori::UL, -4, -13}, {Ori::L, -5, -8}},
-    /* RIGHT */ {{Ori::U, 3, -15}, {Ori::UR, 4, -13}, {Ori::R, 5, -8}},
-};
-
 const char *DirName(const Dir d)
 {
     switch (d)
@@ -53,185 +26,103 @@ const char *DirName(const Dir d)
     }
 }
 
-void DrawSword(Renderer2D &r, const Ori ori, const Float x, const Float y, const Float flash)
-{
-    DrawOptions o;
-    o.flash = flash;
-    const char *name = "sword_h";
-    switch (ori)
-    {
-    case Ori::R:
-        break;
-    case Ori::L:
-        o.flipX = true;
-        break;
-    case Ori::D:
-        name = "sword_v";
-        break;
-    case Ori::U:
-        name = "sword_v";
-        o.flipY = true;
-        break;
-    case Ori::DR:
-        name = "sword_d";
-        break;
-    case Ori::DL:
-        name = "sword_d";
-        o.flipX = true;
-        break;
-    case Ori::UR:
-        name = "sword_d";
-        o.flipY = true;
-        break;
-    case Ori::UL:
-        name = "sword_d";
-        o.flipX = true;
-        o.flipY = true;
-        break;
-    }
-    r.Draw(name, x, y, o);
-}
-
-Bool SwordBehind(const Ori ori)
-{
-    return ori == Ori::U || ori == Ori::UL || ori == Ori::UR;
-}
-
-void TipOffset(const Ori ori, Float &tx, Float &ty)
-{
-    const Float angle = static_cast<Float>(static_cast<Int32>(ori)) * 0.7854f;
-    tx = std::cos(angle) * 13.0f;
-    ty = std::sin(angle) * 13.0f;
-}
-
 void DrawPlayer(const World &world, Renderer2D &r)
 {
     const Player &p = world.player;
-    const Bool blink = p.iframes > 0.0f && p.state != PState::HURT && (world.tickCount / 3) % 2 == 0;
     DrawOptions o;
     o.flipX = p.dir == Dir::LEFT;
     o.scale = p.scale;
-    o.flash = p.state == PState::HURT ? 0.8f : 0.0f;
-    if (p.charging && p.charge >= 0.7f && (world.tickCount / 4) % 2 == 0)
+    DrawOptions shadow;
+    shadow.tint = {0.0f, 0.0f, 0.0f, 0.45f};
+    shadow.scale = p.scale;
+    r.Draw("shadow", p.x, p.y, shadow);
+    std::string name;
+    switch (p.state)
     {
-        o.flash = 0.35f;
-    }
-
-    if (p.state != PState::DEAD || p.t < 1.2f)
+    case PState::HOLD:
+        name = "hero_hold";
+        o.flipX = false;
+        break;
+    case PState::SHRINK:
+    case PState::GROW:
+        name = "hero_down_0";
+        o.flipX = false;
+        o.flash = (world.tickCount / 3) % 2 == 0 ? 0.6f : 0.0f;
+        break;
+    default:
     {
-        DrawOptions shadow;
-        shadow.tint = {0.0f, 0.0f, 0.0f, 0.45f};
-        shadow.scale = p.scale;
-        r.Draw("shadow", p.x, p.y, shadow);
-    }
-
-    // Sword pose for this frame (if any).
-    Bool has_sword = false;
-    SwordPose pose{};
-    if (p.state == PState::SWING)
-    {
-        const Int32 phase = std::min(2, static_cast<Int32>(p.t / (0.22f / 3.0f)));
-        pose = SWING[static_cast<Int32>(p.dir)][phase];
-        has_sword = true;
-    }
-    else if (p.state == PState::SPIN)
-    {
-        static const Ori start[4] = {Ori::D, Ori::U, Ori::L, Ori::R};
-        const Int32 step = static_cast<Int32>(p.t / 0.45f * 9.0f);
-        const Int32 idx = (static_cast<Int32>(start[static_cast<Int32>(p.dir)]) + step) % 8;
-        const Float angle = static_cast<Float>(idx) * 0.7854f;
-        pose = {static_cast<Ori>(idx), std::cos(angle) * 5.0f, -8.0f + std::sin(angle) * 4.0f};
-        has_sword = true;
-    }
-    else if (p.charging && p.state == PState::NORMAL)
-    {
-        pose = SWING[static_cast<Int32>(p.dir)][2];
-        has_sword = true;
-    }
-
-    const Float sword_flash = (p.charging && p.charge >= 0.7f) ? 0.6f : 0.0f;
-    if (has_sword && SwordBehind(pose.ori) && !blink)
-    {
-        DrawSword(r, pose.ori, p.x + pose.ox, p.y + pose.oy, sword_flash);
-    }
-
-    if (!blink)
-    {
-        std::string name;
-        Float draw_x = p.x;
-        Float draw_y = p.y;
-        switch (p.state)
+        Int32 frame = 0;
+        if (p.moving)
         {
-        case PState::SWING:
-        case PState::SPIN:
-            name = std::string("hero_atk_") + DirName(p.dir);
-            if (p.state == PState::SPIN)
-            {
-                static const Dir order[4] = {Dir::DOWN, Dir::LEFT, Dir::UP, Dir::RIGHT};
-                const Dir d = order[static_cast<Int32>(p.t / 0.45f * 4.0f) % 4];
-                name = std::string("hero_atk_") + DirName(d);
-                o.flipX = d == Dir::LEFT;
-            }
-            break;
-        case PState::ROLL:
-            name = "hero_roll_" + std::to_string(static_cast<Int32>(p.t * 14.0f) % 4);
-            o.flipX = p.rollX < 0.0f;
-            break;
-        case PState::HOLD:
-            name = "hero_hold";
-            o.flipX = false;
-            break;
-        case PState::DEAD:
-        {
-            if (p.t < 1.2f)
-            {
-                static const Dir order[4] = {Dir::DOWN, Dir::LEFT, Dir::UP, Dir::RIGHT};
-                const Dir d = order[static_cast<Int32>(p.t * 10.0f) % 4];
-                name = std::string("hero_") + DirName(d) + "_0";
-                o.flipX = d == Dir::LEFT;
-            }
-            else
-            {
-                name = "hero_lie";
-                o.flipX = false;
-            }
-            break;
+            frame = static_cast<Int32>(p.anim * 8.0f) % 4;
         }
-        default:
-        {
-            Int32 frame = 0;
-            if (p.moving)
-            {
-                frame = static_cast<Int32>(p.anim * (p.charging ? 5.0f : 8.0f)) % 4;
-            }
-            name = std::string("hero_") + DirName(p.dir) + "_" + std::to_string(frame);
-            break;
-        }
-        }
-        if (p.state == PState::SHRINK || p.state == PState::GROW)
-        {
-            name = "hero_down_0";
-            o.flipX = false;
-            o.flash = (world.tickCount / 3) % 2 == 0 ? 0.6f : 0.0f;
-        }
-        r.Draw(name, draw_x, draw_y, o);
+        name = std::string("hero_") + DirName(p.dir) + "_" + std::to_string(frame);
+        break;
     }
-
-    if (has_sword && !SwordBehind(pose.ori) && !blink)
-    {
-        DrawSword(r, pose.ori, p.x + pose.ox, p.y + pose.oy, sword_flash);
     }
-    if (has_sword && p.charging && p.charge >= 0.7f)
-    {
-        Float tx, ty;
-        TipOffset(pose.ori, tx, ty);
-        r.Draw("sparkle_" + std::to_string((world.tickCount / 4) % 3), p.x + pose.ox + tx,
-               p.y + pose.oy + ty, {});
-    }
+    r.Draw(name, p.x, p.y, o);
     if (p.state == PState::HOLD && !p.holdItem.empty())
     {
         r.Draw(p.holdItem, p.x, p.y - 22.0f, {});
     }
+}
+
+// The lead critter trots along behind Pip.
+Bool FollowerPosition(const World &world, Float &x, Float &y, Dir &dir)
+{
+    const Player &p = world.player;
+    if (world.party.empty() || p.state == PState::SHRINK || p.state == PState::GROW)
+    {
+        return false;
+    }
+    if (p.trail.size() < 2)
+    {
+        // Fresh on a map: wait one step behind Pip.
+        x = p.x - DirX(p.dir) * 14.0f;
+        y = p.y - DirY(p.dir) * 14.0f;
+        dir = p.dir;
+        return true;
+    }
+    // Walk back along the trail about 14 pixels.
+    Float remaining = 14.0f;
+    Float px = p.x;
+    Float py = p.y;
+    for (const TrailPoint &t : p.trail)
+    {
+        const Float dx = t.x - px;
+        const Float dy = t.y - py;
+        const Float len = std::sqrt(dx * dx + dy * dy);
+        dir = t.dir;
+        if (len >= remaining)
+        {
+            x = px + dx / len * remaining;
+            y = py + dy / len * remaining;
+            return true;
+        }
+        remaining -= len;
+        px = t.x;
+        py = t.y;
+    }
+    x = px;
+    y = py;
+    return true;
+}
+
+void DrawFollower(const World &world, Renderer2D &r, const Float x, const Float y, const Dir dir)
+{
+    const Critter &lead = world.party.front();
+    const Int32 d = dir == Dir::DOWN ? 0 : (dir == Dir::UP ? 1 : (dir == Dir::LEFT ? 2 : 3));
+    const Int32 frame = world.player.moving ? static_cast<Int32>(world.player.anim * 7.0f) : (world.tickCount / 30);
+    Bool flip = false;
+    const std::string name = FollowerSprite(lead.species, d, frame, flip);
+    DrawOptions o;
+    o.flipX = flip;
+    DrawOptions shadow;
+    shadow.tint = {0.0f, 0.0f, 0.0f, 0.45f};
+    r.Draw("shadow", x, y, shadow);
+    const Float hop = lead.Def().directional ? 0.0f : (frame % 2 == 0 ? 0.0f : 1.0f);
+    const Float lift = lead.Def().sprite == std::string("bat") ? 6.0f : 0.0f;
+    r.Draw(name, x, y - hop - lift, o);
 }
 
 std::string PickupSprite(const Entity &e, const Int32 tick)
@@ -241,15 +132,15 @@ std::string PickupSprite(const Entity &e, const Int32 tick)
     {
         return v + "_" + std::to_string((tick / 10) % 2);
     }
-    if (v == "heartc")
+    if (v == "cap")
     {
-        return "heart_container";
+        return "cap";
     }
     if (v == "sunstone")
     {
         return "sunstone_" + std::to_string((tick / 12) % 2);
     }
-    if (v == "key" || v == "bigkey" || v == "heart")
+    if (v == "key" || v == "bigkey")
     {
         return v;
     }
@@ -259,7 +150,6 @@ std::string PickupSprite(const Entity &e, const Int32 tick)
 void DrawEntity(const World &world, const Entity &e, Renderer2D &r)
 {
     DrawOptions o;
-    o.flash = e.hurt > 0.0f && (world.tickCount / 2) % 2 == 0 ? 0.85f : 0.0f;
     DrawOptions shadow;
     shadow.tint = {0.0f, 0.0f, 0.0f, 0.45f};
     const Int32 tick = world.tickCount;
@@ -326,7 +216,7 @@ void DrawEntity(const World &world, const Entity &e, Renderer2D &r)
         {
             break;
         }
-        const Bool floating = e.variant == "sunstone" || e.variant == "heartc";
+        const Bool floating = e.variant == "sunstone";
         const Float bob = floating && e.vz == 0.0f ? std::sin(world.time * 3.0f) * 2.0f + 3.0f : 0.0f;
         r.Draw("shadow", e.x, e.y, shadow);
         r.Draw(PickupSprite(e, tick), e.x, e.y - e.z - bob, o);
@@ -336,70 +226,20 @@ void DrawEntity(const World &world, const Entity &e, Renderer2D &r)
         }
         break;
     }
-    case Kind::SEED:
-        r.Draw("shadow", e.x, e.y + 2.0f, shadow);
-        r.Draw("seed", e.x, e.y - 4.0f, o);
-        break;
-    case Kind::BLOB:
+    case Kind::LEGEND:
     {
-        Int32 frame = 0;
-        if (e.state == 1)
-            frame = 2;
-        else if (e.anim < 0.12f)
-            frame = 1;
-        else
-            frame = static_cast<Int32>(e.anim * 3.0f) % 2;
-        r.Draw("shadow", e.x, e.y, shadow);
-        r.Draw("blob_" + e.variant + "_" + std::to_string(frame), e.x, e.y - e.z, o);
-        break;
-    }
-    case Kind::POD:
-        o.flipX = e.dir == Dir::LEFT;
-        r.Draw(std::string("pod_") + DirName(e.dir) + "_" + std::to_string(e.state == 1 ? 1 : 0),
-               e.x, e.y, o);
-        break;
-    case Kind::BEETLE:
-    case Kind::ANT:
-        o.flipX = e.dir == Dir::LEFT;
-        r.Draw(std::string(e.kind == Kind::BEETLE ? "beetle_" : "ant_") + DirName(e.dir) + "_" +
-                   std::to_string(static_cast<Int32>(e.anim * 7.0f) % 2),
-               e.x, e.y, o);
-        break;
-    case Kind::BAT:
-        r.Draw("shadow", e.x, e.y, shadow);
-        r.Draw("bat_" + std::to_string(e.state == 0 ? 1 : static_cast<Int32>(e.anim * 9.0f) % 2),
-               e.x, e.y - e.z, o);
-        break;
-    case Kind::BOSS:
-    {
-        DrawOptions big_shadow = shadow;
-        r.Draw("shadow_big", e.x, e.y - 1.0f, big_shadow);
-        Float sx = e.x;
-        if (e.state == 1)
+        r.Draw("shadow_big", e.x, e.y - 1.0f, shadow);
+        // Asleep until you get close, then it stirs.
+        const Float dx = world.player.x - e.x;
+        const Float dy = world.player.y - e.y;
+        const Bool near = dx * dx + dy * dy < 56.0f * 56.0f;
+        const std::string name = std::string("boss_down_") + std::to_string(near ? (tick / 10) % 2 : 0);
+        r.Draw(name, e.x + (near && (tick / 2) % 8 == 0 ? 1.0f : 0.0f), e.y, o);
+        if (!near && (tick / 40) % 2 == 0)
         {
-            sx += (tick / 2) % 2 == 0 ? -1.0f : 1.0f;
+            r.Text("z", e.x + 14.0f - r.CameraX(), e.y - 34.0f - r.CameraY() - static_cast<Float>((tick / 6) % 6),
+                   {0.8f, 0.85f, 1.0f, 1.0f});
         }
-        std::string name;
-        if (e.state == 4 || e.state == 5)
-        {
-            name = "boss_flip_" + std::to_string((tick / 6) % 2);
-            if (e.state == 4 && e.timer < 0.8f)
-            {
-                sx += (tick / 2) % 2 == 0 ? -1.0f : 1.0f;
-            }
-        }
-        else
-        {
-            o.flipX = e.dir == Dir::LEFT;
-            const Float rate = e.state == 2 ? 16.0f : 6.0f;
-            name = std::string("boss_") + DirName(e.dir) + "_" +
-                   std::to_string(static_cast<Int32>(e.anim * rate) % 2);
-        }
-        if (e.state == 9)
-        {
-            o.flash = (tick / 3) % 2 == 0 ? 0.9f : 0.0f;
-        }
-        r.Draw(name, sx, e.y, o);
         break;
     }
     case Kind::EFFECT:
@@ -473,7 +313,7 @@ void RenderWorld(World &world, Renderer2D &r)
     // Stump shimmer once the player can use it.
     for (const Entity &e : world.entities)
     {
-        if (e.kind == Kind::STUMP && world.hasSword && (world.tickCount / 8) % 3 != 0)
+        if (e.kind == Kind::STUMP && !world.party.empty() && (world.tickCount / 8) % 3 != 0)
         {
             const Float a = world.time * 2.0f;
             r.Draw("sparkle_" + std::to_string((world.tickCount / 5) % 3),
@@ -493,20 +333,36 @@ void RenderWorld(World &world, Renderer2D &r)
     }
     std::stable_sort(sorted.begin(), sorted.end(),
                      [](const Entity *a, const Entity *b) { return a->y < b->y; });
+    Float fx = 0.0f;
+    Float fy = 0.0f;
+    Dir fdir = Dir::DOWN;
+    const Bool follower = FollowerPosition(world, fx, fy, fdir);
     Bool player_drawn = false;
+    Bool follower_drawn = !follower;
+    const auto draw_actors_above = [&](const Float y) {
+        // Pip and the follower, in y order, if they stand above y.
+        for (Int32 pass = 0; pass < 2; ++pass)
+        {
+            const Bool follower_first = fy <= world.player.y;
+            const Bool do_follower = (pass == 0) == follower_first;
+            if (do_follower && !follower_drawn && fy < y)
+            {
+                DrawFollower(world, r, fx, fy, fdir);
+                follower_drawn = true;
+            }
+            if (!do_follower && !player_drawn && world.player.y < y)
+            {
+                DrawPlayer(world, r);
+                player_drawn = true;
+            }
+        }
+    };
     for (const Entity *e : sorted)
     {
-        if (!player_drawn && e->y > world.player.y)
-        {
-            DrawPlayer(world, r);
-            player_drawn = true;
-        }
+        draw_actors_above(e->y);
         DrawEntity(world, *e, r);
     }
-    if (!player_drawn)
-    {
-        DrawPlayer(world, r);
-    }
+    draw_actors_above(1.0e9f);
     for (const Entity &e : world.entities)
     {
         if (e.alive && IsOverlay(e))
@@ -520,15 +376,13 @@ void RenderHud(const World &world, Renderer2D &r)
 {
     DrawOptions screen;
     screen.screen = true;
-    const Player &p = world.player;
-    const Int32 hearts = p.maxHp / 2;
-    for (Int32 i = 0; i < hearts; ++i)
-    {
-        const Int32 value = p.hp - i * 2;
-        const char *name = value >= 2 ? "hud_heart_full" : (value == 1 ? "hud_heart_half" : "hud_heart_empty");
-        r.Draw(name, 3.0f + static_cast<Float>(i) * 8.0f, 3.0f, screen);
-    }
     char buffer[16];
+    if (!world.party.empty())
+    {
+        r.Draw("hud_cap", 3.0f, 3.0f, screen);
+        std::snprintf(buffer, sizeof(buffer), "x%d", world.caps);
+        r.Text(buffer, 14.0f, 3.0f);
+    }
     std::snprintf(buffer, sizeof(buffer), "%03d", world.gems);
     r.Draw("hud_gem", 210.0f, 3.0f, screen);
     r.Text(buffer, 219.0f, 3.0f);
@@ -544,10 +398,10 @@ void RenderHud(const World &world, Renderer2D &r)
     }
     if (!world.prompt.empty())
     {
-        const std::string text = "X " + world.prompt;
+        const std::string text = "Z " + world.prompt;
         const Float w = Renderer2D::MeasureText(text) + 8.0f;
         r.FillRect(120.0f - w * 0.5f, 2.0f, w, 11.0f, {0.08f, 0.08f, 0.2f, 0.7f});
         r.TextCentered(text, 120.0f, 3.0f, {1.0f, 0.95f, 0.6f, 1.0f});
     }
 }
-} // namespace smallcap
+} // namespace crittercap

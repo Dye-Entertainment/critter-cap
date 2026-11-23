@@ -1,7 +1,7 @@
 #pragma once
 #include "platform/types.h"
 
-namespace smallcap
+namespace crittercap
 {
 enum class Sfx : UInt8
 {
@@ -36,6 +36,10 @@ enum class Sfx : UInt8
     THUD,
     MENU,
     DIE,
+    THROW,
+    CAUGHT,
+    LEVEL_UP,
+    HEAL,
     COUNT
 };
 
@@ -49,6 +53,7 @@ enum class Music : UInt8
     DUNGEON,
     BOSS,
     ENDING,
+    BATTLE,
     COUNT
 };
 
@@ -56,4 +61,4 @@ Bool InitializeAudio();
 void ShutdownAudio();
 void PlaySfx(Sfx sfx, Float volume = 1.0f, Float pitch = 1.0f);
 void PlayMusic(Music music);
-} // namespace smallcap
+} // namespace crittercap

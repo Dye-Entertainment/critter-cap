@@ -12,7 +12,7 @@
 #include <vector>
 #include "compiled/warning_on.h"
 
-namespace smallcap
+namespace crittercap
 {
 constexpr Float SCREEN_W = 240.0f;
 constexpr Float SCREEN_H = 160.0f;
@@ -117,4 +117,4 @@ class Renderer2D final
     Float cameraY = 0.0f;
     Float brightness = 1.0f;
 };
-} // namespace smallcap
+} // namespace crittercap

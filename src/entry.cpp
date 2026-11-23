@@ -1,11 +1,11 @@
 #include "core/entry.h"
-#include "small_cap.h"
+#include "critter_cap.h"
 
 int core::entry()
 {
-    SmallCap application;
+    CritterCap application;
     core::WindowInfo window_info;
-    window_info.windowName = "Small Cap";
+    window_info.windowName = "Critter Cap";
     // The game renders at the GBA-like 240x160 and is scaled 4x.
     window_info.windowSize = {960, 640};
     if (application.Initialize(window_info))

@@ -19,6 +19,6 @@ git init -q -b gh-pages
 git add -A
 git -c user.name="$(git -C "$OLDPWD" config user.name)" \
     -c user.email="$(git -C "$OLDPWD" config user.email)" \
-    commit -q -m "Deploy small-cap $REV"
+    commit -q -m "Deploy critter-cap $REV"
 git push -q -f "$REMOTE" gh-pages
 echo "Deployed $REV to gh-pages"

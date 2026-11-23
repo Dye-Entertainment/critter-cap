@@ -1,7 +1,7 @@
 #pragma once
 #include "platform/types.h"
 
-namespace smallcap
+namespace crittercap
 {
 struct Button
 {
@@ -16,13 +16,12 @@ struct Controls
     Button right;
     Button up;
     Button down;
-    Button sword;   // Z / J / Space, pad South
-    Button action;  // X / K / Enter, pad East
-    Button roll;    // C / L / Shift, pad West
-    Button start;   // Enter / P, pad Start
+    Button a;      // Z / J / Space, pad South: talk, confirm
+    Button b;      // X / K / C / Shift / Backspace, pad East or West: cancel, hold to run
+    Button start;  // Enter / P, pad Start: menu
 };
 
 void PollControls(Controls &controls);
 // Clears the edge flags so one press is handled by one fixed tick only.
 void ConsumePresses(Controls &controls);
-} // namespace smallcap
+} // namespace crittercap

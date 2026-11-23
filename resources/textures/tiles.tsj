@@ -5,7 +5,7 @@
  "tilewidth": 16,
  "tileheight": 16,
  "columns": 16,
- "tilecount": 119,
+ "tilecount": 123,
  "image": "tiles.png",
  "imagewidth": 256,
  "imageheight": 128,
@@ -1035,6 +1035,46 @@
    "properties": [
     {
      "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 119,
+   "properties": [
+    {
+     "name": "grass",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 120,
+   "properties": [
+    {
+     "name": "grass",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 121,
+   "properties": [
+    {
+     "name": "grass",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 122,
+   "properties": [
+    {
+     "name": "grass",
      "type": "bool",
      "value": true
     }

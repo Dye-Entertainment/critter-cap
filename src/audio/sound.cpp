@@ -11,7 +11,7 @@
 #include <string>
 #include "compiled/warning_on.h"
 
-namespace smallcap
+namespace crittercap
 {
 namespace
 {
@@ -28,11 +28,11 @@ constexpr std::array<SfxInfo, static_cast<size_t>(Sfx::COUNT)> SFX_INFO = {{
     {"unlock", 1},    {"shutter", 2}, {"push", 1},    {"switch", 2},    {"secret", 1},
     {"shrink", 1},    {"grow", 1},    {"roll", 2},    {"shoot", 3},     {"bounce", 3},
     {"boss_roar", 1}, {"boss_hit", 2}, {"boss_die", 1}, {"thud", 2},    {"menu", 2},
-    {"die", 1},
+    {"die", 1},       {"throw", 1},   {"caught", 1},  {"level_up", 1}, {"heal", 1},
 }};
 
 constexpr std::array<const Char *, static_cast<size_t>(Music::COUNT)> MUSIC_FILES = {
-    nullptr, "title", "village", "woods", "tiny", "dungeon", "boss", "ending"
+    nullptr, "title", "village", "woods", "tiny", "dungeon", "boss", "ending", "battle"
 };
 
 struct AudioState
@@ -143,4 +143,4 @@ void PlayMusic(const Music music)
         ma_sound_set_volume(sound, 0.5f);
     }
 }
-} // namespace smallcap
+} // namespace crittercap

@@ -31,7 +31,7 @@ linux: evogen
 	ninja -C build-linux
 
 run: linux
-	./build-linux/$(CONFIGURATION)/small-cap
+	./build-linux/$(CONFIGURATION)/critter-cap
 
 web: evogen
 	source $(EMSDK)/emsdk_env.sh >/dev/null 2>&1 && \
@@ -41,8 +41,8 @@ web: evogen
 # Packages the web build into ./site for GitHub Pages.
 pages: web
 	rm -rf site && mkdir -p site
-	cp build-web/small-cap.html site/index.html
-	cp build-web/small-cap.js build-web/small-cap.wasm build-web/small-cap.data site/
+	cp build-web/critter-cap.html site/index.html
+	cp build-web/critter-cap.js build-web/critter-cap.wasm build-web/critter-cap.data site/
 	touch site/.nojekyll
 
 # Publishes ./site to the gh-pages branch of origin.

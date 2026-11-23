@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synthesizes Small Cap's sound effects and music (all original).
+"""Synthesizes Critter Cap's sound effects and music (all original).
 
 Usage: make_audio.py <resources_dir>
 Writes sounds/*.wav (effects) and music/*.flac (loops; needs ffmpeg for FLAC encoding).
@@ -186,6 +186,20 @@ def make_sfx(out):
     s["menu"] = tone(1000, 0.05, "square", 0.2, duty=0.25)
     s["die"] = seq([(N("G5"), 0.15), (N("F5"), 0.15), (N("D5"), 0.15), (N("B4"), 0.15),
                     (N("G4"), 0.45)], "tri", 0.5)
+    # Catching sounds (original).
+    s["throw"] = mix(tone(300, 0.3, "square", 0.25, duty=0.25, freq_end=900),
+                     noise(0.25, 0.2, lowpass=0.3))
+    s["caught"] = mix(
+        seq([(N("C6"), 0.09), (N("E6"), 0.09), (N("G6"), 0.09), (N("C7"), 0.09), (None, 0.06),
+             (N("G6"), 0.09), (N("C7"), 0.4)], "square", 0.25, 0.25),
+        seq([(N("C4"), 0.36), (N("G4"), 0.24), (N("C5"), 0.4)], "tri", 0.45))
+    s["level_up"] = seq([(N("G5"), 0.07), (N("B5"), 0.07), (N("D6"), 0.07), (N("G6"), 0.25)],
+                        "square", 0.25, 0.5)
+    s["heal"] = mix(
+        seq([(N("E5"), 0.12), (N("G#5"), 0.12), (N("B5"), 0.12), (N("E6"), 0.12), (N("B5"), 0.12),
+             (N("E6"), 0.35)], "tri", 0.45),
+        seq([(N("E6"), 0.12), (N("B6"), 0.12), (N("E7"), 0.5)], "square", 0.08, 0.25,
+            ), offsets=[0, 0.36])
     os.makedirs(out, exist_ok=True)
     for name, samples in s.items():
         write_wav(os.path.join(out, name + ".wav"), samples)
@@ -315,6 +329,12 @@ SONGS = {
                 "C6:2 B5:1 A5:1 G5:2 E5:2 D5:2 F#5:2 A5:2 D6:2 "
                 "E6:2 D6:1 B5:1 G5:2 B5:2 E5:1 G5:1 B5:1 E6:1 D6:2 B5:2 "
                 "C6:2 E6:2 G6:2 E6:2 D#6:4 B5:4 ") * 2),
+    "battle": dict(bpm=168, bass="drive", drums="rock", duty=0.25, lead_vol=0.2, chords=[
+        "Am", "Am", "F", "G", "Am", "Am", "F", "E"] * 2,
+        melody=("A5:1 -:1 A5:1 C6:1 E6:2 D6:1 C6:1 B5:2 G5:2 E5:2 G5:2 "
+                "A5:1 C6:1 F6:2 E6:1 D6:1 C6:2 D6:2 B5:2 G5:2 D6:2 "
+                "E6:1 -:1 E6:1 D6:1 C6:2 A5:2 E5:1 A5:1 C6:1 E6:1 D6:2 C6:2 "
+                "C6:2 A5:2 F5:2 A5:2 G#5:4 B5:4 ") * 2),
     "ending": dict(bpm=92, bass="pulse", drums="light", chords=[
         "C", "G", "Am", "F", "C", "G", "F/G", "C"],
         melody="G5:2 E5:2 C6:4 D6:2 B5:2 G5:4 C6:2 A5:2 E5:4 F5:2 A5:2 C6:4 "

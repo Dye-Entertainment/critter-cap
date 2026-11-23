@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Procedurally draws all of Small Cap's original pixel art.
+"""Procedurally draws all of Critter Cap's original pixel art (shared with Small Cap).
 
 Usage: make_art.py <out_dir>
 Writes:
@@ -629,6 +629,35 @@ def make_tiles():
         c.put(x, 2, GOLD)
         c.put(x, 13, GOLD)
     add_tile("carpet", c)
+
+
+def tall_grass_tile(base, seed, dark, mid, light):
+    """Encounter grass: rows of leaning tufts over a ground tile."""
+    c = base.copy()
+    r = random.Random(seed)
+    for row, y0 in enumerate((1, 9)):
+        for i in range(3):
+            x0 = i * 6 - (3 if row else 0) + r.randrange(0, 2)
+            tuft = Canvas(T, T)
+            for k, (h, dx) in enumerate(((5, 0), (7, 2), (6, 4))):
+                tuft.vline(x0 + dx + 1, y0 + 7 - h, y0 + 6, mid)
+                tuft.put(x0 + dx + 1, y0 + 7 - h, light)
+                tuft.vline(x0 + dx + 2, y0 + 8 - h, y0 + 6, dark)
+            tuft.hline(x0, x0 + 6, y0 + 7, dark)
+            tuft.outline(OUT)
+            c.blit(tuft, 0, 0)
+    return c
+
+
+def make_extra_tiles():
+    # Appended last so the ids of the shared tiles stay the same.
+    for i in range(2):
+        add_tile("tallgrass%s" % ("" if i == 0 else "2"),
+                 tall_grass_tile(grass_tile(30 + i), 60 + i, GRASS_DD, LEAF_L, GRASS_L), grass=True)
+    for i in range(2):
+        add_tile("moss%s" % ("" if i == 0 else "2"),
+                 tall_grass_tile(soil_tile(32 + i, False), 70 + i, BLADE_D, BLADE, BLADE_L),
+                 grass=True)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1471,6 +1500,51 @@ def make_hud():
     add_sprite("hud_bigkey", bk, 0, 0)
 
 
+def make_catching():
+    """The throwable acorn cap, its HUD icon and the battle platforms."""
+    cap = Canvas(12, 10)
+    cap.ell(5.5, 7, 5.2, 5.2, CAP, CAP_D, CAP_L, clip=lambda x, y: y < 7,
+            light_at=(-0.35, -0.55, 0.3))
+    for y in range(2, 7):
+        for x in range(12):
+            if cap.get(x, y) == CAP and (x * 2 + y) % 4 == 0:
+                cap.put(x, y, CAP_D)
+    cap.rect(5, 0, 2, 2, BARK_D)
+    cap.hline(0, 11, 7, BRIM)
+    cap.hline(0, 11, 8, BRIM_D)
+    cap.outline(OUT)
+    add_sprite("cap", cap, 6, 9)
+    icon = Canvas(9, 8)
+    icon.ell(4, 5, 4, 4, CAP, CAP_D, CAP_L, clip=lambda x, y: y < 5)
+    icon.rect(4, 0, 1, 2, BARK_D)
+    icon.hline(0, 8, 5, BRIM)
+    icon.hline(0, 8, 6, BRIM_D)
+    icon.outline(OUT)
+    add_sprite("hud_cap", icon, 0, 0)
+    for name, (top, side, light) in (("grass", (GRASS, GRASS_DD, GRASS_L)),
+                                     ("soil", (SOIL_L, SOIL_D, (220, 180, 130))),
+                                     ("stone", (DFLOOR_L, DWALL_D, (184, 166, 140)))):
+        pad = Canvas(72, 20)
+        pad.ell(36, 11, 35, 8, side)
+        pad.ell(36, 9, 35, 8, top, None, light, light_at=(-0.2, -0.6, 0.45))
+        pad.outline(OUT)
+        add_sprite("pad_" + name, pad, 36, 12)
+    # A tiny star for "critter caught" and the dex.
+    star = Canvas(7, 7)
+    star.ascii(0, 0, ["...#...", "..###..", "#######", ".#####.", "..###..", ".##.##.", ".#...#."],
+               {"#": GOLD})
+    add_sprite("star", star, 3, 3)
+    # "!" over a trainer who spotted you.
+    for f in range(2):
+        bubble = Canvas(11, 13)
+        bubble.ell(5, 5, 5, 5, WHITE)
+        bubble.ascii(0, 9, ["...###....", "....#....."], {"#": WHITE})
+        bubble.rect(5, 2 - f, 1, 5, RED)
+        bubble.put(5, 8 - f, RED)
+        bubble.outline(OUT)
+        add_sprite("alert_%d" % f, bubble, 5, 12)
+
+
 # ---------------------------------------------------------------------------------------------
 # Font: 5x7 glyphs (lowercase descends 2 rows), 6px advance, baked drop shadow.
 # ---------------------------------------------------------------------------------------------
@@ -1646,12 +1720,14 @@ def main():
     out_dir = sys.argv[1] if len(sys.argv) > 1 else "resources/textures"
     os.makedirs(out_dir, exist_ok=True)
     make_tiles()
+    make_extra_tiles()
     make_people()
     make_sword()
     make_enemies()
     make_objects()
     make_fx()
     make_hud()
+    make_catching()
     make_font()
     write_tileset(out_dir)
     write_atlas(out_dir)
