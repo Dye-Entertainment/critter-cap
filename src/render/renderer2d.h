@@ -116,6 +116,5 @@ class Renderer2D final
     Float cameraX = 0.0f;
     Float cameraY = 0.0f;
     Float brightness = 1.0f;
-    Float pixelScale = 4.0f;
 };
 } // namespace smallcap

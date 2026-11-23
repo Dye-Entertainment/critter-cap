@@ -141,12 +141,9 @@ void Renderer2D::BeginFrame(const Float new_brightness)
     camera.position = FVec4(0.0f, 0.0f, 0.0f, 0.0f);
     camera.previousPosition = camera.position;
 
-    const IVec2 window_size = window::Manager::GetInstance()->GetWindowSize(0);
-    pixelScale = std::max(1.0f, static_cast<Float>(window_size.y) / SCREEN_H);
     for (auto &[key, material] : materials)
     {
         material->Set("uBright", brightness);
-        material->Set("uPixelScale", pixelScale);
     }
 }
 
@@ -178,9 +175,14 @@ resource::Material *Renderer2D::GetMaterial(const Bool tiles, const Color &tint,
     material->Set("uTint", FVec4(tint.r, tint.g, tint.b, tint.a));
     material->Set("uFlash", flash);
     material->Set("uBright", brightness);
-    material->Set("uPixelScale", pixelScale);
     MaterialState state = material->GetMaterialState();
     state.isDoubleSided = true;
+    // The opaque queue draws in submission order and applies each material's state, so
+    // translucent draws (shadows, overlays) blend over whatever was submitted before them.
+    if (tint.a < 0.999f)
+    {
+        state.alphaMode = graphics::AlphaMode::Blend;
+    }
     material->SetMaterialState(state);
     materials[key] = material;
     return material;
