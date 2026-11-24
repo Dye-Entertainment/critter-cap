@@ -1,6 +1,7 @@
 #pragma once
 #include "ecs/core/game_application.h"
 #include "render/renderer2d.h"
+#include "ui/game_ui.h"
 
 class CritterCap final : public GameApplication
 {
@@ -11,4 +12,5 @@ class CritterCap final : public GameApplication
 
   private:
     crittercap::Renderer2D renderer;
+    crittercap::GameUi ui;
 };

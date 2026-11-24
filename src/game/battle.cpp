@@ -17,29 +17,7 @@ namespace
 constexpr Float TYPE_SPEED = 60.0f;
 constexpr size_t BATTLE_LINE = 36;
 constexpr Float INTRO_TIME = 0.8f;
-const Color GOLD{1.0f, 0.86f, 0.35f, 1.0f};
-const Color SOFT{0.75f, 0.8f, 0.95f, 1.0f};
-const Color DIM{0.55f, 0.55f, 0.65f, 1.0f};
-
-Color HpColor(const Float ratio)
-{
-    if (ratio > 0.5f)
-        return {0.35f, 0.85f, 0.4f, 1.0f};
-    if (ratio > 0.2f)
-        return {0.98f, 0.8f, 0.25f, 1.0f};
-    return {0.95f, 0.3f, 0.25f, 1.0f};
-}
-
-void HpBar(Renderer2D &r, const Float x, const Float y, const Float w, const Float ratio)
-{
-    r.FillRect(x - 1.0f, y - 1.0f, w + 2.0f, 5.0f, {0.1f, 0.08f, 0.15f, 1.0f});
-    r.FillRect(x, y, w, 3.0f, {0.3f, 0.3f, 0.36f, 1.0f});
-    const Float fill = std::round(w * std::clamp(ratio, 0.0f, 1.0f));
-    if (fill > 0.0f)
-    {
-        r.FillRect(x, y, fill, 3.0f, HpColor(ratio));
-    }
-}
+constexpr Float GLYPH_ADVANCE = 6.0f;
 
 Float Quantize(const Float v)
 {
@@ -761,12 +739,6 @@ BattleResult Battle::Update(World &world, const Controls &c)
 void Battle::Render(const World &world, Renderer2D &r) const
 {
     RenderScene(world, r);
-    RenderInfo(world, r);
-    RenderBottom(world, r);
-    if (mode == Mode::TEAM || mode == Mode::FORCED_TEAM)
-    {
-        RenderTeam(world, r);
-    }
 }
 
 void Battle::RenderScene(const World &world, Renderer2D &r) const
@@ -875,161 +847,148 @@ void Battle::RenderScene(const World &world, Renderer2D &r) const
     }
 }
 
-void Battle::RenderInfo(const World &world, Renderer2D &r) const
+void Battle::FillUi(const World &world, const GameUi &ui, UiState &state) const
 {
-    DrawOptions o;
-    o.screen = true;
-    char buffer[32];
+    char buffer[48];
+    state.arrowFrame = (tick / 15) % 2;
+
+    // The info boxes show up once the critters are out.
     const Float slide = 1.0f - std::min(1.0f, time / INTRO_TIME);
+    state.enemy = {};
     if (sentOut[ENEMY] && presence[ENEMY] > 0.0f && slide <= 0.0f)
     {
         const Critter &e = enemies[enemyIndex];
-        r.Box(4.0f, 6.0f, 112.0f, 32.0f);
-        r.Text(e.Name(), 12.0f, 12.0f);
+        const Float ratio = std::clamp(shownHp[ENEMY] / static_cast<Float>(e.MaxHp()), 0.0f, 1.0f);
+        state.enemy.visible = true;
+        state.enemy.name = e.Name();
+        state.enemy.nameWidth = static_cast<Float>(state.enemy.name.size()) * GLYPH_ADVANCE;
         std::snprintf(buffer, sizeof(buffer), "Lv%d", e.level);
-        r.Text(buffer, 108.0f - Renderer2D::MeasureText(buffer), 12.0f, SOFT);
-        if (world.caught[static_cast<size_t>(e.species)])
-        {
-            r.Draw("hud_cap", 13.0f + Renderer2D::MeasureText(e.Name()), 12.0f, o);
-        }
-        r.Text("HP", 12.0f, 23.0f, GOLD);
-        HpBar(r, 28.0f, 26.0f, 78.0f, shownHp[ENEMY] / static_cast<Float>(e.MaxHp()));
+        state.enemy.level = buffer;
+        state.enemy.caught = world.caught[static_cast<size_t>(e.species)];
+        state.enemy.hpWidth = std::round(78.0f * ratio);
+        state.enemy.hpColor = HpColor(ratio);
     }
+    state.mine = {};
     if (sentOut[PLAYER] && presence[PLAYER] > 0.0f && !world.party.empty())
     {
         const Critter &m = Active(world);
-        r.Box(124.0f, 70.0f, 112.0f, 40.0f);
-        r.Text(m.Name(), 132.0f, 76.0f);
+        const Float ratio = std::clamp(shownHp[PLAYER] / static_cast<Float>(m.MaxHp()), 0.0f, 1.0f);
+        state.mine.visible = true;
+        state.mine.name = m.Name();
         std::snprintf(buffer, sizeof(buffer), "Lv%d", m.level);
-        r.Text(buffer, 228.0f - Renderer2D::MeasureText(buffer), 76.0f, SOFT);
-        r.Text("HP", 132.0f, 87.0f, GOLD);
-        HpBar(r, 148.0f, 90.0f, 78.0f, shownHp[PLAYER] / static_cast<Float>(m.MaxHp()));
+        state.mine.level = buffer;
+        state.mine.hpWidth = std::round(78.0f * ratio);
+        state.mine.hpColor = HpColor(ratio);
         std::snprintf(buffer, sizeof(buffer), "%d/%d", static_cast<Int32>(std::ceil(shownHp[PLAYER])), m.MaxHp());
-        r.Text(buffer, 228.0f - Renderer2D::MeasureText(buffer), 96.0f);
-        // XP bar.
-        r.FillRect(132.0f, 105.0f, 94.0f, 2.0f, {0.2f, 0.2f, 0.3f, 1.0f});
+        state.mine.hpText = buffer;
         const Float xp = static_cast<Float>(m.xp) / static_cast<Float>(m.XpToNext());
-        r.FillRect(132.0f, 105.0f, std::round(94.0f * std::clamp(xp, 0.0f, 1.0f)), 2.0f,
-                   {0.35f, 0.65f, 1.0f, 1.0f});
+        state.mine.xpWidth = std::round(94.0f * std::clamp(xp, 0.0f, 1.0f));
     }
-}
+    else if (!world.party.empty())
+    {
+        state.mine.name = Active(world).Name();
+    }
 
-void Battle::RenderBottom(const World &world, Renderer2D &r) const
-{
-    DrawOptions o;
-    o.screen = true;
-    r.Box(0.0f, 112.0f, 240.0f, 48.0f);
-    char buffer[48];
+    // The bottom box: the action menu, the moves or the battle messages.
+    state.battleMode.clear();
+    state.battleOptions.clear();
+    state.battleText.clear();
+    state.battleMore = false;
     if (mode == Mode::MENU)
     {
-        r.Text("What will", 12.0f, 122.0f);
-        r.Text(std::string(Active(world).Name()) + " do?", 12.0f, 134.0f);
-        r.Draw("hud_cap", 12.0f, 147.0f, o);
-        std::snprintf(buffer, sizeof(buffer), "x%d", world.caps);
-        r.Text(buffer, 23.0f, 146.0f, SOFT);
-        r.Box(120.0f, 112.0f, 120.0f, 48.0f);
+        state.battleMode = "menu";
         static const Char *OPTIONS[4] = {"FIGHT", "CAP", "TEAM", "RUN"};
         for (Int32 i = 0; i < 4; ++i)
         {
-            const Float x = 140.0f + static_cast<Float>(i % 2) * 50.0f;
-            const Float y = 124.0f + static_cast<Float>(i / 2) * 16.0f;
-            const Bool disabled = (i == 1 && (IsTrainer() || world.caps <= 0)) || (i == 3 && (IsTrainer() || legend));
-            r.Text(OPTIONS[i], x, y, disabled ? DIM : Color{});
-            if (i == cursor)
-            {
-                r.Text(">", x - 8.0f, y, GOLD);
-            }
+            UiOption option;
+            option.label = OPTIONS[i];
+            option.x = 140.0f + static_cast<Float>(i % 2) * 50.0f;
+            option.y = 124.0f + static_cast<Float>(i / 2) * 16.0f;
+            option.disabled = (i == 1 && (IsTrainer() || world.caps <= 0)) || (i == 3 && (IsTrainer() || legend));
+            option.selected = i == cursor;
+            state.battleOptions.push_back(option);
         }
-        return;
     }
-    if (mode == Mode::MOVES)
+    else if (mode == Mode::MOVES)
     {
+        state.battleMode = "moves";
         const Critter &m = Active(world);
-        r.Box(160.0f, 112.0f, 80.0f, 48.0f);
         for (Int32 i = 0; i < m.MoveCount(); ++i)
         {
-            const Float x = 16.0f + static_cast<Float>(i % 2) * 72.0f;
-            const Float y = 124.0f + static_cast<Float>(i / 2) * 16.0f;
-            r.Text(Move(m.MoveAt(i)).name, x, y);
-            if (i == moveCursor)
-            {
-                r.Text(">", x - 8.0f, y, GOLD);
-            }
+            UiOption option;
+            option.label = Move(m.MoveAt(i)).name;
+            option.x = 16.0f + static_cast<Float>(i % 2) * 72.0f;
+            option.y = 124.0f + static_cast<Float>(i / 2) * 16.0f;
+            option.selected = i == moveCursor;
+            state.battleOptions.push_back(option);
         }
         const MoveDef &move = Move(m.MoveAt(moveCursor));
-        r.Text(TypeName(move.type), 170.0f, 122.0f, GOLD);
+        state.moveType = TypeName(move.type);
         std::snprintf(buffer, sizeof(buffer), "Pow %d", move.power);
-        r.Text(buffer, 170.0f, 134.0f);
+        state.movePower = buffer;
         const Float effect = Effectiveness(move.type, enemies[enemyIndex].Def().type);
+        state.moveEffect.clear();
         if (world.caught[static_cast<size_t>(enemies[enemyIndex].species)] && effect != 1.0f)
         {
-            r.Text(effect > 1.0f ? "Strong!" : "Weak...", 170.0f, 146.0f, effect > 1.0f ? GOLD : DIM);
+            state.moveEffect = effect > 1.0f ? "Strong!" : "Weak...";
+            state.moveStrong = effect > 1.0f;
         }
-        return;
     }
-    if (mode == Mode::STEPS && !shownText.empty())
+    else if (mode == Mode::STEPS && !shownText.empty())
     {
         // The last message stays up while the animations that follow it play.
+        state.battleMode = "text";
         const Bool typing = !steps.empty() && steps.front().type == StepType::TEXT && stepStarted;
         const std::vector<std::string> lines = Wrap(shownText, BATTLE_LINE);
         size_t remaining = typing ? static_cast<size_t>(typed) : shownText.size();
-        Float y = 122.0f;
         for (size_t i = 0; i < lines.size() && i < 3; ++i)
         {
             const size_t n = std::min(remaining, lines[i].size());
-            r.Text(lines[i].substr(0, n), 12.0f, y);
+            if (i > 0)
+            {
+                state.battleText += '\n';
+            }
+            state.battleText += lines[i].substr(0, n);
             remaining = remaining > lines[i].size() + 1 ? remaining - lines[i].size() - 1 : 0;
-            y += 12.0f;
         }
-        if (typing && typed >= static_cast<Float>(shownText.size()))
-        {
-            r.Draw("arrow_" + std::to_string((tick / 15) % 2), 222.0f, 148.0f, o);
-        }
+        state.battleText = ToUiText(state.battleText);
+        state.battleMore = typing && typed >= static_cast<Float>(shownText.size());
     }
-}
 
-void Battle::RenderTeam(const World &world, Renderer2D &r) const
-{
-    DrawOptions o;
-    o.screen = true;
-    r.FillRect(0.0f, 0.0f, SCREEN_W, SCREEN_H, {0.0f, 0.0f, 0.05f, 0.5f});
-    r.Box(16.0f, 8.0f, 208.0f, 144.0f);
-    r.TextCentered(mode == Mode::FORCED_TEAM ? "Who's next?" : "Switch to which critter?", 120.0f, 16.0f, GOLD);
-    char buffer[32];
+    // Picking a critter to switch to.
+    state.battleTeam = mode == Mode::TEAM || mode == Mode::FORCED_TEAM;
+    state.battleTeamBack = mode == Mode::TEAM;
+    if (!state.battleTeam)
+    {
+        return;
+    }
+    state.battleTeamTitle = mode == Mode::FORCED_TEAM ? "Who's next?" : "Switch to which critter?";
+    state.party.clear();
     for (size_t i = 0; i < world.party.size(); ++i)
     {
         const Critter &c = world.party[i];
-        const Float y = 32.0f + static_cast<Float>(i) * 28.0f;
-        const Bool selected = static_cast<Int32>(i) == teamCursor;
-        if (selected)
-        {
-            r.FillRect(26.0f, y - 2.0f, 188.0f, 26.0f, {1.0f, 1.0f, 1.0f, 0.12f});
-            r.Text(">", 28.0f, y + 6.0f, GOLD);
-        }
-        DrawOptions s = o;
-        s.tint.a = c.Fainted() ? 0.5f : 1.0f;
-        r.Draw(SpeciesSprite(c.species, false, selected ? (tick / 12) % 2 : 0), 48.0f, y + 18.0f, s);
-        r.Text(c.Name(), 64.0f, y + 1.0f, c.Fainted() ? DIM : Color{});
+        UiCritterRow row;
+        row.y = 32.0f + static_cast<Float>(i) * 28.0f;
+        row.selected = static_cast<Int32>(i) == teamCursor;
+        row.fainted = c.Fainted();
+        row.out = static_cast<Int32>(i) == active;
+        row.name = c.Name();
         std::snprintf(buffer, sizeof(buffer), "Lv%d", c.level);
-        r.Text(buffer, 132.0f, y + 1.0f, SOFT);
-        if (static_cast<Int32>(i) == active)
-        {
-            r.Text("OUT", 180.0f, y + 1.0f, GOLD);
-        }
-        HpBar(r, 64.0f, y + 14.0f, 80.0f, static_cast<Float>(c.hp) / static_cast<Float>(c.MaxHp()));
+        row.level = buffer;
+        const Float ratio = std::clamp(static_cast<Float>(c.hp) / static_cast<Float>(c.MaxHp()), 0.0f, 1.0f);
+        row.hpWidth = std::round(80.0f * ratio);
+        row.hpColor = HpColor(ratio);
         if (c.Fainted())
         {
-            r.Text("FNT", 150.0f, y + 11.0f, {1.0f, 0.5f, 0.5f, 1.0f});
+            row.hpText = "FNT";
         }
         else
         {
             std::snprintf(buffer, sizeof(buffer), "%d/%d", c.hp, c.MaxHp());
-            r.Text(buffer, 150.0f, y + 11.0f);
+            row.hpText = buffer;
         }
-    }
-    if (mode == Mode::TEAM)
-    {
-        r.TextCentered("Z: switch   X: back", 120.0f, 140.0f, SOFT);
+        row.sprite = ui.Sprite(SpeciesSprite(c.species, false, row.selected ? (tick / 12) % 2 : 0), 48.0f, row.y + 18.0f);
+        state.party.push_back(row);
     }
 }
 } // namespace crittercap

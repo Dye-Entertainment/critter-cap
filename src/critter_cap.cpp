@@ -12,8 +12,13 @@ Bool CritterCap::DerrivedInitialize()
         LOGERROR("Critter Cap could not load its graphics");
         return false;
     }
+    if (!ui.Initialize(&renderer))
+    {
+        LOGERROR("Critter Cap could not load its UI");
+        return false;
+    }
     crittercap::InitializeAudio();
-    core::SceneManager::GetInstance()->AddScene("Critter Cap", new crittercap::GameScene(&renderer));
+    core::SceneManager::GetInstance()->AddScene("Critter Cap", new crittercap::GameScene(&renderer, &ui));
     return true;
 }
 
@@ -25,6 +30,7 @@ Bool CritterCap::UpdateLoop(const Double)
 void CritterCap::Destroy()
 {
     crittercap::ShutdownAudio();
+    ui.Shutdown();
     renderer.Shutdown();
     GameApplication::Destroy();
 }

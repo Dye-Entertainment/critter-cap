@@ -1546,7 +1546,8 @@ def make_catching():
 
 
 # ---------------------------------------------------------------------------------------------
-# Font: 5x7 glyphs (lowercase descends 2 rows), 6px advance, baked drop shadow.
+# Font: 5x7 glyphs (lowercase descends 2 rows), 6px advance. tools/make_ui.py turns it into
+# the UI font (resources/ui/pixel.ttf).
 # ---------------------------------------------------------------------------------------------
 FONT = {
     "A": [".###.", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"],
@@ -1640,19 +1641,16 @@ FONT = {
 }
 
 
-def make_font():
-    shadow = (40, 36, 60)
-    for ch in [chr(i) for i in range(32, 127)] + ["\x01"]:
-        c = Canvas(6, 10)
-        rows = FONT.get(ch)
-        if rows:
-            for y, row in enumerate(rows):
-                for x, v in enumerate(row):
-                    if v == "#":
-                        if c.get(x + 1, y + 2) is None:
-                            c.put(x + 1, y + 2, shadow)
-                        c.put(x, y, WHITE)
-        add_sprite("font_%d" % ord(ch), c, 0, 0)
+def make_sleep_z():
+    # The "z" that floats over sleeping critters, from the font.
+    c = Canvas(6, 10)
+    for y, row in enumerate(FONT["z"]):
+        for x, v in enumerate(row):
+            if v == "#":
+                if c.get(x + 1, y + 2) is None:
+                    c.put(x + 1, y + 2, (40, 36, 60))
+                c.put(x, y, WHITE)
+    add_sprite("sleep_z", c, 0, 0)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1728,7 +1726,7 @@ def main():
     make_fx()
     make_hud()
     make_catching()
-    make_font()
+    make_sleep_z()
     write_tileset(out_dir)
     write_atlas(out_dir)
 

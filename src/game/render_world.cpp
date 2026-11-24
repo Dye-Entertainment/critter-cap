@@ -237,8 +237,9 @@ void DrawEntity(const World &world, const Entity &e, Renderer2D &r)
         r.Draw(name, e.x + (near && (tick / 2) % 8 == 0 ? 1.0f : 0.0f), e.y, o);
         if (!near && (tick / 40) % 2 == 0)
         {
-            r.Text("z", e.x + 14.0f - r.CameraX(), e.y - 34.0f - r.CameraY() - static_cast<Float>((tick / 6) % 6),
-                   {0.8f, 0.85f, 1.0f, 1.0f});
+            DrawOptions z;
+            z.tint = {0.8f, 0.85f, 1.0f, 1.0f};
+            r.Draw("sleep_z", e.x + 14.0f, e.y - 34.0f - static_cast<Float>((tick / 6) % 6), z);
         }
         break;
     }
@@ -372,36 +373,4 @@ void RenderWorld(World &world, Renderer2D &r)
     }
 }
 
-void RenderHud(const World &world, Renderer2D &r)
-{
-    DrawOptions screen;
-    screen.screen = true;
-    char buffer[16];
-    if (!world.party.empty())
-    {
-        r.Draw("hud_cap", 3.0f, 3.0f, screen);
-        std::snprintf(buffer, sizeof(buffer), "x%d", world.caps);
-        r.Text(buffer, 14.0f, 3.0f);
-    }
-    std::snprintf(buffer, sizeof(buffer), "%03d", world.gems);
-    r.Draw("hud_gem", 210.0f, 3.0f, screen);
-    r.Text(buffer, 219.0f, 3.0f);
-    if (world.map.rooms)
-    {
-        r.Draw("hud_key", 211.0f, 14.0f, screen);
-        std::snprintf(buffer, sizeof(buffer), "x%d", world.keys);
-        r.Text(buffer, 219.0f, 15.0f);
-        if (world.bigKey)
-        {
-            r.Draw("hud_bigkey", 196.0f, 14.0f, screen);
-        }
-    }
-    if (!world.prompt.empty())
-    {
-        const std::string text = "Z " + world.prompt;
-        const Float w = Renderer2D::MeasureText(text) + 8.0f;
-        r.FillRect(120.0f - w * 0.5f, 2.0f, w, 11.0f, {0.08f, 0.08f, 0.2f, 0.7f});
-        r.TextCentered(text, 120.0f, 3.0f, {1.0f, 0.95f, 0.6f, 1.0f});
-    }
-}
 } // namespace crittercap

@@ -1,0 +1,84 @@
+/* Critter Cap UI. Everything is laid out on the 240x160 game screen: 1dp is one game pixel. */
+/* RmlUi has no default style sheet. */
+div, p { display: block; }
+body
+{
+    width: 240dp;
+    height: 160dp;
+    font-family: Pixel;
+    font-size: 10dp;
+    line-height: 12dp;
+    color: #ffffff;
+    font-effect: shadow(1dp 1dp #28243c);
+    pointer-events: none;
+}
+div, span { white-space: pre; }
+.gold { color: #ffdb59; }
+.soft { color: #bfccf2; }
+.dim { color: #8c8ca6; }
+.faint { color: #ff8080; }
+.abs { position: absolute; }
+.center { position: absolute; left: 0; width: 240dp; text-align: center; }
+.right { text-align: right; }
+.screen { position: absolute; left: 0; top: 0; width: 240dp; height: 160dp; }
+.box { decorator: tiled-box(box-tl, box-t, box-tr, box-l, box-m, box-r, box-bl, box-b, box-br); }
+.shade { position: absolute; left: 0; top: 0; width: 240dp; height: 160dp; }
+.highlight { position: absolute; background-color: #ffffff24; }
+img.sprite { position: absolute; }
+
+/* Bars */
+.hpbar { position: absolute; height: 5dp; background-color: #1a1426; }
+.hpbar div { position: absolute; left: 1dp; top: 1dp; height: 3dp; }
+.hpbar .track { background-color: #4d4d5c; }
+.xpbar { position: absolute; left: 132dp; top: 105dp; width: 94dp; height: 2dp; background-color: #33334d; }
+.xpbar div { position: absolute; left: 0; top: 0; height: 2dp; background-color: #59a6ff; }
+
+/* Title */
+#title .shade { background-color: #0d0a1f8c; }
+#title .logo { top: 14dp; font-size: 30dp; line-height: 30dp; color: #ffdb59; font-effect: shadow(1dp 1dp #33190d); }
+#title .subtitle { top: 44dp; }
+#title .start { top: 112dp; }
+#title .help { top: 130dp; }
+
+/* HUD */
+#hud img { position: absolute; }
+#hud .caps { position: absolute; left: 14dp; top: 3dp; }
+#hud .gems { position: absolute; left: 219dp; top: 3dp; }
+#hud .keys { position: absolute; left: 219dp; top: 15dp; }
+#prompt { position: absolute; top: 2dp; left: 0; width: 240dp; text-align: center; }
+#prompt span { display: inline-block; padding: 0 4dp; height: 11dp; line-height: 11dp;
+               background-color: #14143db3; color: #fff299; }
+
+/* Dialog and yes/no questions */
+#dialog { position: absolute; left: 8dp; width: 224dp; height: 48dp; }
+#dialog.bottom { top: 104dp; }
+#dialog.top { top: 8dp; }
+#dialog .text { position: absolute; left: 8dp; top: 7dp; }
+#dialog .arrow { position: absolute; left: 212dp; top: 38dp; }
+#choice .question { position: absolute; left: 8dp; top: 104dp; width: 224dp; height: 48dp; }
+#choice .question div { position: absolute; left: 8dp; top: 7dp; }
+#choice .answers { position: absolute; left: 168dp; top: 64dp; width: 64dp; height: 40dp; }
+#choice .answers div { position: absolute; left: 20dp; }
+
+/* Starter */
+#starter .shade { background-color: #00000d8c; }
+#starter .panel { position: absolute; left: 8dp; top: 16dp; width: 224dp; height: 128dp; }
+
+/* Team and Critterdex */
+#menu .shade { background-color: #00000d99; }
+#menu .panel { position: absolute; left: 8dp; top: 8dp; width: 224dp; height: 144dp; }
+#menu .rule { position: absolute; left: 16dp; top: 27dp; width: 208dp; height: 1dp; background-color: #808ccc; }
+
+/* Battle */
+#battle .info { position: absolute; }
+#battle .bottom { position: absolute; left: 0; top: 112dp; width: 240dp; height: 48dp; }
+#battle .side { position: absolute; top: 112dp; height: 48dp; }
+#battle .arrow { position: absolute; left: 222dp; top: 148dp; }
+#battleteam .shade { background-color: #00000d80; }
+#battleteam .panel { position: absolute; left: 16dp; top: 8dp; width: 208dp; height: 144dp; }
+
+/* Ending */
+#ending .heading { top: 6dp; font-size: 20dp; line-height: 20dp; color: #ffdb59; }
+#ending .stats { top: 24dp; }
+#ending .lines { position: absolute; left: 0; top: 104dp; width: 240dp; text-align: center; }
+#ending .lines div { height: 10dp; line-height: 10dp; }

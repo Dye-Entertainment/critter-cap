@@ -75,6 +75,12 @@ make assets        # regenerates textures, maps, sounds and music
 
 The maps in `resources/maps` are regular Tiled JSON files (tileset `resources/textures/tiles.tsj`),
 so they can be opened in Tiled; `make assets` regenerates them from `tools/make_maps.py`.
+
+The title screen, HUD, dialog boxes, starter pick, team and Critterdex, battle boxes and ending are drawn with the engine's RmlUi UI backend: `resources/ui/game.rml` and
+`game.rcss` lay them out on the 240x160 screen (1dp = one game pixel) and the game fills in a
+data model every frame (`src/ui/game_ui.cpp`). `tools/make_ui.py` builds the pixel font
+(`resources/ui/pixel.ttf`) and the sprite sheet declarations (`sprites.rcss`) from the same
+font and atlas as the game art.
 Map properties `encounters` (`species:minLevel-maxLevel:weight,...`), `wild` (`grass` or
 `everywhere`) and `heal` (the spawn used after a wipe-out) drive the wild critters.
 
@@ -91,5 +97,6 @@ Environment variables for jumping around while developing:
   `trainer:blob_b:5,ant:6`)
 - `CRITTERCAP_FLAGS=a,b`: sets story flags
 - `CRITTERCAP_PEACE=1`: no wild encounters
+- `CRITTERCAP_ENDING=1`: jumps straight to the ending
 - `CRITTERCAP_INPUT="right:60 z:1 wait:30"`: scripted input (`z` confirm, `x` cancel/run)
 - `CRITTERCAP_SHOTS=120,300`: saves screenshots at those ticks, then quits

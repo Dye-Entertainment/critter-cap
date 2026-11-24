@@ -4,6 +4,7 @@
 #include "game/world.h"
 #include "input/controls.h"
 #include "render/renderer2d.h"
+#include "ui/game_ui.h"
 #include "resource/raw_texture.h"
 
 #include "compiled/warning_off.h"
@@ -36,7 +37,7 @@ enum class Phase : UInt8
 class GameScene final : public core::Scene
 {
   public:
-    explicit GameScene(Renderer2D *renderer);
+    GameScene(Renderer2D *renderer, GameUi *ui);
     void Update(const double elapsed_seconds) override;
     void Render() override;
 
@@ -54,14 +55,13 @@ class GameScene final : public core::Scene
     void FinishBattle();
     void UpdateMusic();
     void UpdateMenu();
-    void RenderDialog();
-    void RenderTitle();
+    // Fills in the UI document's state from the game.
+    void UpdateUi();
+    // The ending's sparkles and characters; its text is in the UI document.
     void RenderEnding();
-    void RenderMenu();
-    void RenderStarter();
-    void RenderChoice();
 
     Renderer2D *renderer = nullptr;
+    GameUi *ui = nullptr;
     World world;
     Battle battle;
     BattleResult battleResult = BattleResult::NONE;

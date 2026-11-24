@@ -1,0 +1,195 @@
+<rml>
+<head>
+    <title>Critter Cap</title>
+    <link type="text/rcss" href="sprites.rcss"/>
+    <link type="text/rcss" href="game.rcss"/>
+</head>
+<body data-model="game">
+
+<!-- Title screen -->
+<div id="title" class="screen" data-if="screen == 'title'">
+    <div class="shade"></div>
+    <div data-for="s : titleSprites"><img class="sprite" data-attr-sprite="s.sprite"
+         data-style-left="s.x + 'dp'" data-style-top="s.y + 'dp'"
+         data-style-width="s.w + 'dp'" data-style-height="s.h + 'dp'"/></div>
+    <div class="center logo">CRITTER CAP</div>
+    <div class="center subtitle soft">Pip's Pocket Critters</div>
+    <div class="center start" data-visible="blink">Press Enter</div>
+    <div class="center help soft">Arrows move  Z talk  X run<br/>Enter: team and Critterdex</div>
+</div>
+
+<!-- Exploring -->
+<div class="screen" data-if="screen == 'world'">
+    <div id="hud" data-if="hud">
+        <div data-if="hasParty"><img sprite="hud-cap" style="left: 3dp; top: 3dp;"/><span class="caps">x{{ caps }}</span></div>
+        <img sprite="hud-gem" style="left: 210dp; top: 3dp;"/><span class="gems">{{ gems }}</span>
+        <div data-if="dungeon">
+            <img sprite="hud-bigkey" style="left: 196dp; top: 14dp;" data-if="bigKey"/>
+            <img sprite="hud-key" style="left: 211dp; top: 14dp;"/>
+            <span class="keys">x{{ keys }}</span>
+        </div>
+        <div id="prompt" data-if="prompt != ''"><span>{{ prompt }}</span></div>
+    </div>
+
+    <div id="dialog" class="box" data-if="dialog" data-class-top="dialogTop" data-class-bottom="!dialogTop">
+        <div class="text"><span class="gold">{{ speaker }}</span>{{ text }}</div>
+        <img class="arrow" data-if="more" data-attr-sprite="'arrow-' + arrowFrame"/>
+    </div>
+
+    <div id="choice" data-if="choice">
+        <div class="question box"><div>{{ question }}</div></div>
+        <div class="answers box">
+            <div style="top: 8dp;">YES</div>
+            <div style="top: 22dp;">NO</div>
+            <div class="gold" style="left: 10dp;" data-style-top="(choiceCursor == 0 ? 8 : 22) + 'dp'">&gt;</div>
+        </div>
+    </div>
+
+    <div id="starter" class="screen" data-if="starter">
+        <div class="shade"></div>
+        <div class="panel box"></div>
+        <div class="center gold" style="top: 24dp;">Choose your partner!</div>
+        <div class="highlight" data-style-left="(starterCursor * 72 + 20) + 'dp'" style="top: 38dp; width: 56dp; height: 64dp;"></div>
+        <div data-for="s : starterSprites"><img class="sprite" data-attr-sprite="s.sprite"
+             data-style-left="s.x + 'dp'" data-style-top="s.y + 'dp'"
+             data-style-width="s.w + 'dp'" data-style-height="s.h + 'dp'"/></div>
+        <div class="abs" data-for="o : starterNames" data-class-gold="o.selected"
+             data-style-left="(o.x - 40) + 'dp'" style="top: 104dp; width: 80dp; text-align: center;">{{ o.label }}</div>
+        <div class="center soft" style="top: 116dp;">{{ starterType }}</div>
+        <div class="center soft" style="top: 128dp;">{{ starterDex }}</div>
+    </div>
+
+    <div id="menu" class="screen" data-if="menu">
+        <div class="shade"></div>
+        <div class="panel box"></div>
+        <div class="abs" style="left: 24dp; top: 16dp;" data-class-gold="menuTab == 0" data-class-dim="menuTab != 0">TEAM</div>
+        <div class="abs" style="left: 64dp; top: 16dp;" data-class-gold="menuTab == 1" data-class-dim="menuTab != 1">CRITTERDEX</div>
+        <div class="abs soft right" style="left: 160dp; top: 16dp; width: 60dp;">{{ playTime }}</div>
+        <div class="rule"></div>
+
+        <div data-if="menuTab == 0">
+            <div data-if="party.size == 0">
+                <div class="center soft" style="top: 70dp;">No critters yet!</div>
+                <div class="center soft" style="top: 84dp;">Elder Bram is in the village square.</div>
+            </div>
+            <div data-for="c : party">
+                <div class="highlight" data-if="c.selected" data-style-top="(c.y - 1) + 'dp'" style="left: 16dp; width: 208dp; height: 23dp;"></div>
+                <img class="sprite" data-attr-sprite="c.sprite.sprite"
+                     data-style-left="c.sprite.x + 'dp'" data-style-top="c.sprite.y + 'dp'"/>
+                <div class="abs" style="left: 48dp;" data-class-dim="c.fainted" data-style-top="(c.y + 1) + 'dp'">{{ c.name }}</div>
+                <div class="abs soft" style="left: 120dp;" data-style-top="(c.y + 1) + 'dp'">{{ c.info }}</div>
+                <div class="hpbar" style="left: 48dp; width: 82dp;" data-style-top="(c.y + 13) + 'dp'">
+                    <div data-style-width="c.hpWidth + 'dp'" data-style-background-color="c.hpColor"></div>
+                </div>
+                <div class="abs" style="left: 136dp;" data-style-top="(c.y + 11) + 'dp'">{{ c.hpText }}</div>
+                <div class="abs gold" style="left: 190dp;" data-if="c.lead" data-style-top="(c.y + 11) + 'dp'">LEAD</div>
+            </div>
+            <img sprite="hud-cap" class="sprite" style="left: 18dp; top: 131dp;"/>
+            <div class="abs" style="left: 29dp; top: 130dp;">x{{ caps }}</div>
+            <img sprite="hud-gem" class="sprite" style="left: 60dp; top: 130dp;"/>
+            <div class="abs" style="left: 70dp; top: 130dp;">{{ gemCount }}</div>
+            <div class="abs soft" style="left: 100dp; top: 130dp;" data-if="pocket != ''">{{ pocket }}</div>
+            <div class="abs soft" style="left: 150dp; top: 130dp;">Z: make lead</div>
+            <div class="center dim" style="top: 139dp;">Right: Critterdex   X or Enter: close</div>
+        </div>
+
+        <div data-if="menuTab == 1">
+            <div class="abs soft" style="left: 24dp; top: 30dp;">{{ caughtText }}</div>
+            <div data-for="d : dex">
+                <div class="highlight" data-if="d.selected" data-style-left="(d.x - 22) + 'dp'" data-style-top="(d.y - 26) + 'dp'" style="width: 44dp; height: 32dp;"></div>
+                <img class="sprite" data-if="d.seen" data-attr-sprite="d.sprite.sprite"
+                     data-style-left="d.sprite.x + 'dp'" data-style-top="d.sprite.y + 'dp'"
+                     data-style-width="d.sprite.w + 'dp'" data-style-height="d.sprite.h + 'dp'"
+                     data-style-image-color="d.caught ? '#ffffff' : '#1a1a33'"/>
+                <img class="sprite" sprite="hud-cap" data-if="d.caught" data-style-left="(d.x + 10) + 'dp'" data-style-top="(d.y - 24) + 'dp'"/>
+                <div class="abs dim" data-if="!d.seen" data-style-left="(d.x - 20) + 'dp'" data-style-top="(d.y - 14) + 'dp'" style="width: 40dp; text-align: center;">?</div>
+                <div class="abs dim" data-style-left="(d.x - 20) + 'dp'" data-style-top="(d.y - 1) + 'dp'" style="width: 40dp; text-align: center;">{{ d.number }}</div>
+            </div>
+            <div class="abs" style="left: 24dp; top: 104dp;" data-class-gold="dexSeen" data-class-dim="!dexSeen">{{ dexTitle }}</div>
+            <div class="abs" style="left: 24dp; top: 116dp; line-height: 11dp;" data-class-soft="!dexCaught">{{ dexText }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Battle -->
+<div id="battle" class="screen" data-if="screen == 'battle'">
+    <div class="info box" style="left: 4dp; top: 6dp; width: 112dp; height: 32dp;" data-if="enemy.visible">
+        <div class="abs" style="left: 8dp; top: 6dp;">{{ enemy.name }}</div>
+        <img class="sprite" sprite="hud-cap" data-if="enemy.caught" data-style-left="(9 + enemy.nameWidth) + 'dp'" style="top: 6dp;"/>
+        <div class="abs soft right" style="left: 64dp; top: 6dp; width: 40dp;">{{ enemy.level }}</div>
+        <div class="abs gold" style="left: 8dp; top: 17dp;">HP</div>
+        <div class="hpbar" style="left: 23dp; top: 19dp; width: 80dp;">
+            <div class="track" style="width: 78dp;"></div>
+            <div data-style-width="enemy.hpWidth + 'dp'" data-style-background-color="enemy.hpColor"></div>
+        </div>
+    </div>
+    <div class="info box" style="left: 124dp; top: 70dp; width: 112dp; height: 40dp;" data-if="mine.visible">
+        <div class="abs" style="left: 8dp; top: 6dp;">{{ mine.name }}</div>
+        <div class="abs soft right" style="left: 64dp; top: 6dp; width: 40dp;">{{ mine.level }}</div>
+        <div class="abs gold" style="left: 8dp; top: 17dp;">HP</div>
+        <div class="hpbar" style="left: 23dp; top: 19dp; width: 80dp;">
+            <div class="track" style="width: 78dp;"></div>
+            <div data-style-width="mine.hpWidth + 'dp'" data-style-background-color="mine.hpColor"></div>
+        </div>
+        <div class="abs right" style="left: 44dp; top: 26dp; width: 60dp;">{{ mine.hpText }}</div>
+    </div>
+    <div class="xpbar" data-if="mine.visible"><div data-style-width="mine.xpWidth + 'dp'"></div></div>
+
+    <div class="bottom box"></div>
+    <div data-if="battleMode == 'menu'">
+        <div class="abs" style="left: 12dp; top: 122dp;">What will<br/>{{ mine.name }} do?</div>
+        <img class="sprite" sprite="hud-cap" style="left: 12dp; top: 147dp;"/>
+        <div class="abs soft" style="left: 23dp; top: 146dp;">x{{ caps }}</div>
+        <div class="side box" style="left: 120dp; width: 120dp;"></div>
+    </div>
+    <div data-if="battleMode == 'moves'">
+        <div class="side box" style="left: 160dp; width: 80dp;"></div>
+        <div class="abs gold" style="left: 170dp; top: 122dp;">{{ moveType }}</div>
+        <div class="abs" style="left: 170dp; top: 134dp;">{{ movePower }}</div>
+        <div class="abs" style="left: 170dp; top: 146dp;" data-class-gold="moveStrong" data-class-dim="!moveStrong">{{ moveEffect }}</div>
+    </div>
+    <div data-for="o : battleOptions">
+        <div class="abs" data-class-dim="o.disabled" data-style-left="o.x + 'dp'" data-style-top="o.y + 'dp'">{{ o.label }}</div>
+        <div class="abs gold" data-if="o.selected" data-style-left="(o.x - 8) + 'dp'" data-style-top="o.y + 'dp'">&gt;</div>
+    </div>
+    <div class="abs" style="left: 12dp; top: 122dp;" data-if="battleMode == 'text'">{{ battleText }}</div>
+    <img class="arrow" data-if="battleMore" data-attr-sprite="'arrow-' + arrowFrame"/>
+
+    <div id="battleteam" class="screen" data-if="battleTeam">
+        <div class="shade"></div>
+        <div class="panel box"></div>
+        <div class="center gold" style="top: 16dp;">{{ battleTeamTitle }}</div>
+        <div data-for="c : party">
+            <div class="highlight" data-if="c.selected" data-style-top="(c.y - 2) + 'dp'" style="left: 26dp; width: 188dp; height: 26dp;"></div>
+            <div class="abs gold" data-if="c.selected" style="left: 28dp;" data-style-top="(c.y + 6) + 'dp'">&gt;</div>
+            <img class="sprite" data-attr-sprite="c.sprite.sprite"
+                 data-style-left="c.sprite.x + 'dp'" data-style-top="c.sprite.y + 'dp'"
+                 data-style-opacity="c.fainted ? 0.5 : 1"/>
+            <div class="abs" style="left: 64dp;" data-class-dim="c.fainted" data-style-top="(c.y + 1) + 'dp'">{{ c.name }}</div>
+            <div class="abs soft" style="left: 132dp;" data-style-top="(c.y + 1) + 'dp'">{{ c.level }}</div>
+            <div class="abs gold" style="left: 180dp;" data-if="c.out" data-style-top="(c.y + 1) + 'dp'">OUT</div>
+            <div class="hpbar" style="left: 63dp; width: 82dp;" data-style-top="(c.y + 13) + 'dp'">
+                <div class="track" style="width: 80dp;"></div>
+                <div data-style-width="c.hpWidth + 'dp'" data-style-background-color="c.hpColor"></div>
+            </div>
+            <div class="abs" style="left: 150dp;" data-class-faint="c.fainted" data-style-top="(c.y + 11) + 'dp'">{{ c.hpText }}</div>
+        </div>
+        <div class="center soft" style="top: 140dp;" data-if="battleTeamBack">Z: switch   X: back</div>
+    </div>
+</div>
+
+<!-- Ending -->
+<div id="ending" class="screen" data-if="screen == 'ending'">
+    <div class="center heading">CRITTER CAP</div>
+    <div class="center stats soft" data-if="stats != ''">{{ stats }}</div>
+    <div class="lines">
+        <div data-visible="endingLines > 0">The Sunstone shines again,</div>
+        <div data-visible="endingLines > 1">and the critters of the Rootwood</div>
+        <div data-visible="endingLines > 2">are calm and happy once more.</div>
+        <div data-visible="endingLines > 3"></div>
+        <div class="gold" data-visible="endingLines > 4">Thanks for playing CRITTER CAP!</div>
+    </div>
+</div>
+
+</body>
+</rml>

@@ -3,6 +3,7 @@
 #include "game/world.h"
 #include "input/controls.h"
 #include "render/renderer2d.h"
+#include "ui/game_ui.h"
 
 #include "compiled/warning_off.h"
 #include <deque>
@@ -29,7 +30,10 @@ class Battle final
     void Start(World &world, const Request &request);
     // Advances one fixed tick; returns the outcome once the battle is over.
     BattleResult Update(World &world, const Controls &controls);
+    // Draws the battle scene: background, critters, trainers and the thrown cap.
     void Render(const World &world, Renderer2D &renderer) const;
+    // Fills in the battle's info boxes, menus, messages and team screen.
+    void FillUi(const World &world, const GameUi &ui, UiState &state) const;
 
     Bool IsTrainer() const
     {
@@ -110,9 +114,6 @@ class Battle final
     }
 
     void RenderScene(const World &world, Renderer2D &r) const;
-    void RenderInfo(const World &world, Renderer2D &r) const;
-    void RenderBottom(const World &world, Renderer2D &r) const;
-    void RenderTeam(const World &world, Renderer2D &r) const;
 
     std::vector<Critter> enemies;
     size_t enemyIndex = 0;

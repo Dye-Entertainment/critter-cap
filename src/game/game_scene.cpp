@@ -59,9 +59,6 @@ const ItemDef *FindItem(const std::string &id)
     return nullptr;
 }
 
-const Color GOLD_TEXT{1.0f, 0.86f, 0.35f, 1.0f};
-const Color SOFT_TEXT{0.75f, 0.8f, 0.95f, 1.0f};
-const Color DIM_TEXT{0.5f, 0.5f, 0.6f, 1.0f};
 
 Bool Confirm(const Controls &c)
 {
@@ -69,7 +66,7 @@ Bool Confirm(const Controls &c)
 }
 } // namespace
 
-GameScene::GameScene(Renderer2D *renderer_2d) : renderer(renderer_2d)
+GameScene::GameScene(Renderer2D *renderer_2d, GameUi *game_ui) : renderer(renderer_2d), ui(game_ui)
 {
     if (!LoadTileInfo(world.tileInfo))
     {
@@ -215,6 +212,14 @@ void GameScene::NewGame()
             "Capo: He's waiting in the village square. Use the arrow keys to walk and Z to talk. "
             "Let's go!"
         );
+    }
+    if (std::getenv("CRITTERCAP_ENDING"))
+    {
+        // Test hook: jump straight to the ending.
+        world.request = Request{};
+        phase = Phase::ENDING;
+        phaseTime = 0.0f;
+        PlayMusic(Music::ENDING);
     }
 }
 
@@ -937,285 +942,247 @@ void GameScene::Render()
     if (phase == Phase::ENDING)
     {
         RenderEnding();
-        return;
     }
-    if (phase == Phase::BATTLE || phase == Phase::BATTLE_OUT)
+    else if (phase == Phase::BATTLE || phase == Phase::BATTLE_OUT)
     {
         battle.Render(world, *renderer);
+    }
+    else
+    {
+        RenderWorld(world, *renderer);
+    }
+    UpdateUi();
+}
+
+void GameScene::UpdateUi()
+{
+    if (!ui)
+    {
         return;
     }
-    RenderWorld(world, *renderer);
-    if (phase == Phase::TITLE)
-    {
-        RenderTitle();
-        return;
-    }
-    if (phase != Phase::BATTLE_IN)
-    {
-        RenderHud(world, *renderer);
-    }
-    if (phase == Phase::DIALOG)
-    {
-        RenderDialog();
-    }
-    if (phase == Phase::MENU)
-    {
-        RenderMenu();
-    }
-    if (phase == Phase::STARTER)
-    {
-        RenderStarter();
-    }
-    if (phase == Phase::CHOICE)
-    {
-        RenderChoice();
-    }
-}
-
-void GameScene::RenderDialog()
-{
-    Renderer2D &r = *renderer;
-    const Float box_y = world.player.y - world.cameraY > 100.0f ? 8.0f : 104.0f;
-    r.Box(8.0f, box_y, 224.0f, 48.0f);
-    const std::string &text = pages[page];
-    const auto shown = static_cast<size_t>(typed);
-    Float y = box_y + 7.0f;
-    size_t start = 0;
-    Bool first_line = true;
-    while (start <= text.size())
-    {
-        size_t end = text.find('\n', start);
-        if (end == std::string::npos)
-        {
-            end = text.size();
-        }
-        if (start >= shown)
-        {
-            break;
-        }
-        std::string line = text.substr(start, std::min(end, shown) - start);
-        Float x = 16.0f;
-        // A leading "Name:" is drawn as the speaker in gold.
-        if (first_line)
-        {
-            const size_t colon = line.find(':');
-            const size_t full_colon = text.find(':');
-            if (colon != std::string::npos && colon < 12 && full_colon == colon &&
-                text.substr(0, colon).find(' ') == std::string::npos)
-            {
-                r.Text(line.substr(0, colon + 1), x, y, GOLD_TEXT);
-                x += Renderer2D::MeasureText(line.substr(0, colon + 1));
-                line = line.substr(colon + 1);
-            }
-        }
-        r.Text(line, x, y);
-        y += 12.0f;
-        first_line = false;
-        start = end + 1;
-    }
-    if (shown >= text.size())
-    {
-        DrawOptions o;
-        o.screen = true;
-        r.Draw("arrow_" + std::to_string((world.tickCount / 15) % 2), 220.0f, box_y + 38.0f, o);
-    }
-}
-
-void GameScene::RenderTitle()
-{
-    Renderer2D &r = *renderer;
-    r.FillRect(0.0f, 0.0f, SCREEN_W, SCREEN_H, {0.05f, 0.04f, 0.12f, 0.55f});
-    DrawOptions o;
-    o.screen = true;
-    const Float bob = std::sin(phaseTime * 2.0f) * 2.0f;
-    r.Draw("capo_big", 120.0f, 92.0f + bob, o);
-    // The three starters bounce around the hat.
-    DrawOptions s = o;
-    s.scale = 2.0f;
-    for (Int32 i = 0; i < 3; ++i)
-    {
-        const Float x = 64.0f + static_cast<Float>(i) * 56.0f;
-        const Float hop = std::max(0.0f, std::sin(phaseTime * 4.0f + static_cast<Float>(i) * 2.1f)) * 6.0f;
-        if (i == 1)
-        {
-            continue;
-        }
-        r.Draw(SpeciesSprite(i, false, static_cast<Int32>(phaseTime * 3.0f)), x, 96.0f - hop, s);
-    }
-    r.Draw(SpeciesSprite(1, false, static_cast<Int32>(phaseTime * 3.0f)), 120.0f, 104.0f, o);
-    r.TextCentered("CRITTER CAP", 121.0f, 15.0f, {0.2f, 0.1f, 0.05f, 1.0f}, 3.0f);
-    r.TextCentered("CRITTER CAP", 120.0f, 14.0f, GOLD_TEXT, 3.0f);
-    r.TextCentered("Pip's Pocket Critters", 120.0f, 44.0f, SOFT_TEXT);
-    if (static_cast<Int32>(phaseTime * 2.0f) % 2 == 0)
-    {
-        r.TextCentered("Press Enter", 120.0f, 112.0f);
-    }
-    r.TextCentered("Arrows move  Z talk  X run", 120.0f, 130.0f, SOFT_TEXT);
-    r.TextCentered("Enter: team and Critterdex", 120.0f, 142.0f, SOFT_TEXT);
-}
-
-void GameScene::RenderStarter()
-{
-    Renderer2D &r = *renderer;
-    DrawOptions o;
-    o.screen = true;
-    r.FillRect(0.0f, 0.0f, SCREEN_W, SCREEN_H, {0.0f, 0.0f, 0.05f, 0.55f});
-    r.Box(8.0f, 16.0f, 224.0f, 128.0f);
-    r.TextCentered("Choose your partner!", 120.0f, 24.0f, GOLD_TEXT);
-    for (Int32 i = 0; i < 3; ++i)
-    {
-        const Float x = 48.0f + static_cast<Float>(i) * 72.0f;
-        const Bool selected = i == starterCursor;
-        if (selected)
-        {
-            r.FillRect(x - 28.0f, 38.0f, 56.0f, 64.0f, {1.0f, 1.0f, 1.0f, 0.14f});
-        }
-        DrawOptions s = o;
-        s.scale = selected ? 3.0f : 2.0f;
-        const Float hop = selected ? std::max(0.0f, std::sin(phaseTime * 6.0f)) * 4.0f : 0.0f;
-        r.Draw("pad_grass", x, 92.0f, o);
-        r.Draw(SpeciesSprite(i, false, selected ? static_cast<Int32>(phaseTime * 4.0f) : 0), x, 90.0f - hop, s);
-        r.TextCentered(Species(i).name, x, 104.0f, selected ? GOLD_TEXT : Color{});
-    }
-    const SpeciesDef &def = Species(starterCursor);
-    r.TextCentered(std::string(TypeName(def.type)) + " type", 120.0f, 116.0f, SOFT_TEXT);
-    const std::vector<std::string> lines = Wrap(def.dex, 34);
-    r.TextCentered(lines.empty() ? "" : lines[0], 120.0f, 128.0f, SOFT_TEXT);
-}
-
-void GameScene::RenderChoice()
-{
-    Renderer2D &r = *renderer;
-    r.Box(8.0f, 104.0f, 224.0f, 48.0f);
-    const std::vector<std::string> lines = Wrap(choiceQuestion, 22);
-    Float y = 111.0f;
-    for (size_t i = 0; i < lines.size() && i < 3; ++i)
-    {
-        r.Text(lines[i], 16.0f, y);
-        y += 12.0f;
-    }
-    r.Box(168.0f, 64.0f, 64.0f, 40.0f);
-    r.Text("YES", 188.0f, 72.0f);
-    r.Text("NO", 188.0f, 86.0f);
-    r.Text(">", 178.0f, choiceCursor == 0 ? 72.0f : 86.0f, GOLD_TEXT);
-}
-
-void GameScene::RenderMenu()
-{
-    Renderer2D &r = *renderer;
-    DrawOptions o;
-    o.screen = true;
-    r.FillRect(0.0f, 0.0f, SCREEN_W, SCREEN_H, {0.0f, 0.0f, 0.05f, 0.6f});
-    r.Box(8.0f, 8.0f, 224.0f, 144.0f);
-    r.Text("TEAM", 24.0f, 16.0f, menuTab == 0 ? GOLD_TEXT : DIM_TEXT);
-    r.Text("CRITTERDEX", 64.0f, 16.0f, menuTab == 1 ? GOLD_TEXT : DIM_TEXT);
+    UiState &state = ui->State();
+    const Bool in_battle = phase == Phase::BATTLE || phase == Phase::BATTLE_OUT;
+    state.screen = phase == Phase::TITLE    ? "title"
+                   : phase == Phase::ENDING ? "ending"
+                   : in_battle              ? "battle"
+                                            : "world";
+    state.arrowFrame = static_cast<Int32>((world.tickCount / 15) % 2);
+    state.blink = static_cast<Int32>(phaseTime * 2.0f) % 2 == 0;
     char buffer[64];
     const auto seconds = static_cast<Int32>(playTime);
-    std::snprintf(buffer, sizeof(buffer), "%d:%02d", seconds / 60, seconds % 60);
-    r.Text(buffer, 220.0f - Renderer2D::MeasureText(buffer), 16.0f, SOFT_TEXT);
-    r.FillRect(16.0f, 27.0f, 208.0f, 1.0f, {0.5f, 0.55f, 0.8f, 1.0f});
-    const Int32 frame = (world.tickCount / 15) % 2;
-    if (menuTab == 0)
+
+    // Title: Capo bobs, the three starters bounce around the hat.
+    state.titleSprites.clear();
+    if (phase == Phase::TITLE)
     {
-        if (world.party.empty())
+        const Float bob = std::sin(phaseTime * 2.0f) * 2.0f;
+        state.titleSprites.push_back(ui->Sprite("capo_big", 120.0f, 92.0f + bob));
+        const Int32 frame = static_cast<Int32>(phaseTime * 3.0f);
+        for (Int32 i = 0; i < 3; i += 2)
         {
-            r.TextCentered("No critters yet!", 120.0f, 70.0f, SOFT_TEXT);
-            r.TextCentered("Elder Bram is in the village square.", 120.0f, 84.0f, SOFT_TEXT);
+            const Float x = 64.0f + static_cast<Float>(i) * 56.0f;
+            const Float hop =
+                std::max(0.0f, std::sin(phaseTime * 4.0f + static_cast<Float>(i) * 2.1f)) * 6.0f;
+            state.titleSprites.push_back(ui->Sprite(SpeciesSprite(i, false, frame), x, 96.0f - hop, 2.0f));
         }
-        for (size_t i = 0; i < world.party.size(); ++i)
-        {
-            const Critter &c = world.party[i];
-            const Float y = 32.0f + static_cast<Float>(i) * 24.0f;
-            const Bool selected = static_cast<Int32>(i) == menuCursor;
-            if (selected)
-            {
-                r.FillRect(16.0f, y - 1.0f, 208.0f, 23.0f, {1.0f, 1.0f, 1.0f, 0.12f});
-            }
-            r.Draw(SpeciesSprite(c.species, false, selected ? frame : 0), 32.0f, y + 18.0f, o);
-            r.Text(c.Name(), 48.0f, y + 1.0f, c.Fainted() ? DIM_TEXT : Color{});
-            std::snprintf(buffer, sizeof(buffer), "Lv%d %s", c.level, TypeName(c.Def().type));
-            r.Text(buffer, 120.0f, y + 1.0f, SOFT_TEXT);
-            const Float ratio = static_cast<Float>(c.hp) / static_cast<Float>(c.MaxHp());
-            r.FillRect(48.0f, y + 13.0f, 82.0f, 5.0f, {0.1f, 0.08f, 0.15f, 1.0f});
-            r.FillRect(49.0f, y + 14.0f, std::round(80.0f * ratio), 3.0f,
-                       ratio > 0.5f ? Color{0.35f, 0.85f, 0.4f, 1.0f}
-                                    : (ratio > 0.2f ? Color{0.98f, 0.8f, 0.25f, 1.0f} : Color{0.95f, 0.3f, 0.25f, 1.0f}));
-            std::snprintf(buffer, sizeof(buffer), "%d/%d", c.hp, c.MaxHp());
-            r.Text(buffer, 136.0f, y + 11.0f);
-            if (i == 0)
-            {
-                r.Text("LEAD", 190.0f, y + 11.0f, GOLD_TEXT);
-            }
-        }
-        r.Draw("hud_cap", 18.0f, 131.0f, o);
-        std::snprintf(buffer, sizeof(buffer), "x%d", world.caps);
-        r.Text(buffer, 29.0f, 130.0f);
-        r.Draw("hud_gem", 60.0f, 130.0f, o);
-        std::snprintf(buffer, sizeof(buffer), "%d", world.gems);
-        r.Text(buffer, 70.0f, 130.0f);
-        if (!world.box.empty())
-        {
-            std::snprintf(buffer, sizeof(buffer), "Pocket: %zu", world.box.size());
-            r.Text(buffer, 100.0f, 130.0f, SOFT_TEXT);
-        }
-        r.Text("Z: make lead", 150.0f, 130.0f, SOFT_TEXT);
-        r.TextCentered("Right: Critterdex   X or Enter: close", 120.0f, 141.0f, DIM_TEXT);
-        return;
+        state.titleSprites.push_back(ui->Sprite(SpeciesSprite(1, false, frame), 120.0f, 104.0f));
     }
-    // Critterdex: 4x2 grid and a description of the selected entry.
-    for (Int32 i = 0; i < SPECIES_COUNT; ++i)
+
+    // HUD
+    state.hud = phase != Phase::TITLE && phase != Phase::BATTLE_IN && !in_battle;
+    state.hasParty = !world.party.empty();
+    state.caps = world.caps;
+    std::snprintf(buffer, sizeof(buffer), "%03d", world.gems);
+    state.gems = buffer;
+    state.dungeon = world.map.rooms;
+    state.keys = world.keys;
+    state.bigKey = world.bigKey;
+    state.prompt = world.prompt.empty() ? std::string() : "Z " + ToUiText(world.prompt);
+
+    // Dialog: typed out character by character; a leading "Name:" is the speaker, in gold.
+    state.dialog = phase == Phase::DIALOG;
+    state.speaker.clear();
+    state.text.clear();
+    state.more = false;
+    if (state.dialog)
     {
-        const Float x = 40.0f + static_cast<Float>(i % 4) * 53.0f;
-        const Float y = 58.0f + static_cast<Float>(i / 4) * 34.0f;
-        const auto index = static_cast<size_t>(i);
-        if (i == menuCursor)
+        state.dialogTop = world.player.y - world.cameraY > 100.0f;
+        const std::string &text = pages[page];
+        const size_t shown = std::min(static_cast<size_t>(typed), text.size());
+        std::string visible = text.substr(0, shown);
+        const size_t colon = text.find(':');
+        if (colon != std::string::npos && colon < 12 && colon < text.find('\n') &&
+            text.substr(0, colon).find(' ') == std::string::npos)
         {
-            r.FillRect(x - 22.0f, y - 26.0f, 44.0f, 32.0f, {1.0f, 1.0f, 1.0f, 0.14f});
+            const size_t speaker_length = std::min(colon + 1, visible.size());
+            state.speaker = visible.substr(0, speaker_length);
+            visible = visible.substr(speaker_length);
         }
-        if (world.seen[index])
+        state.text = ToUiText(visible);
+        state.more = shown >= text.size();
+    }
+
+    // Yes/no questions
+    state.choice = phase == Phase::CHOICE;
+    if (state.choice)
+    {
+        const std::vector<std::string> lines = Wrap(choiceQuestion, 22);
+        state.question.clear();
+        for (size_t i = 0; i < lines.size() && i < 3; ++i)
         {
-            DrawOptions s = o;
-            if (!world.caught[index])
+            state.question += (i > 0 ? "\n" : "") + lines[i];
+        }
+        state.question = ToUiText(state.question);
+        state.choiceCursor = choiceCursor;
+    }
+
+    // Starter pick
+    state.starter = phase == Phase::STARTER;
+    state.starterSprites.clear();
+    state.starterNames.clear();
+    if (state.starter)
+    {
+        state.starterCursor = starterCursor;
+        for (Int32 i = 0; i < 3; ++i)
+        {
+            const Float x = 48.0f + static_cast<Float>(i) * 72.0f;
+            const Bool selected = i == starterCursor;
+            const Float hop = selected ? std::max(0.0f, std::sin(phaseTime * 6.0f)) * 4.0f : 0.0f;
+            state.starterSprites.push_back(ui->Sprite("pad_grass", x, 92.0f));
+            state.starterSprites.push_back(ui->Sprite(
+                SpeciesSprite(i, false, selected ? static_cast<Int32>(phaseTime * 4.0f) : 0), x,
+                90.0f - hop, selected ? 3.0f : 2.0f
+            ));
+            UiOption name;
+            name.label = Species(i).name;
+            name.x = x;
+            name.selected = selected;
+            state.starterNames.push_back(name);
+        }
+        const SpeciesDef &def = Species(starterCursor);
+        state.starterType = std::string(TypeName(def.type)) + " type";
+        const std::vector<std::string> lines = Wrap(def.dex, 34);
+        state.starterDex = lines.empty() ? "" : lines[0];
+    }
+
+    // Team and Critterdex
+    state.menu = phase == Phase::MENU;
+    if (state.menu)
+    {
+        state.menuTab = menuTab;
+        std::snprintf(buffer, sizeof(buffer), "%d:%02d", seconds / 60, seconds % 60);
+        state.playTime = buffer;
+        const Int32 frame = static_cast<Int32>((world.tickCount / 15) % 2);
+        state.party.clear();
+        state.dex.clear();
+        if (menuTab == 0)
+        {
+            for (size_t i = 0; i < world.party.size(); ++i)
             {
-                s.tint = {0.1f, 0.1f, 0.2f, 1.0f};
+                const Critter &c = world.party[i];
+                UiCritterRow row;
+                row.y = 32.0f + static_cast<Float>(i) * 24.0f;
+                row.selected = static_cast<Int32>(i) == menuCursor;
+                row.fainted = c.Fainted();
+                row.lead = i == 0;
+                row.name = c.Name();
+                std::snprintf(buffer, sizeof(buffer), "Lv%d %s", c.level, TypeName(c.Def().type));
+                row.info = buffer;
+                const Float ratio =
+                    std::clamp(static_cast<Float>(c.hp) / static_cast<Float>(c.MaxHp()), 0.0f, 1.0f);
+                row.hpWidth = std::round(80.0f * ratio);
+                row.hpColor = HpColor(ratio);
+                std::snprintf(buffer, sizeof(buffer), "%d/%d", c.hp, c.MaxHp());
+                row.hpText = buffer;
+                row.sprite = ui->Sprite(SpeciesSprite(c.species, false, row.selected ? frame : 0), 32.0f, row.y + 18.0f);
+                state.party.push_back(row);
             }
-            s.scale = i == LEGEND_SPECIES ? 0.75f : 1.0f;
-            r.Draw(SpeciesSprite(i, false, i == menuCursor ? frame : 0), x, y - 4.0f, s);
-            if (world.caught[index])
+            state.gemCount = std::to_string(world.gems);
+            state.pocket.clear();
+            if (!world.box.empty())
             {
-                r.Draw("hud_cap", x + 10.0f, y - 24.0f, o);
+                std::snprintf(buffer, sizeof(buffer), "Pocket: %zu", world.box.size());
+                state.pocket = buffer;
             }
         }
         else
         {
-            r.TextCentered("?", x, y - 14.0f, DIM_TEXT);
+            for (Int32 i = 0; i < SPECIES_COUNT; ++i)
+            {
+                const auto index = static_cast<size_t>(i);
+                UiDexEntry entry;
+                entry.x = 40.0f + static_cast<Float>(i % 4) * 53.0f;
+                entry.y = 58.0f + static_cast<Float>(i / 4) * 34.0f;
+                entry.selected = i == menuCursor;
+                entry.seen = world.seen[index];
+                entry.caught = world.caught[index];
+                entry.sprite = ui->Sprite(
+                    SpeciesSprite(i, false, entry.selected ? frame : 0), entry.x, entry.y - 4.0f,
+                    i == LEGEND_SPECIES ? 0.75f : 1.0f
+                );
+                std::snprintf(buffer, sizeof(buffer), "%02d", i + 1);
+                entry.number = buffer;
+                state.dex.push_back(entry);
+            }
+            std::snprintf(buffer, sizeof(buffer), "Caught %d/%d", CaughtCount(world), SPECIES_COUNT);
+            state.caughtText = buffer;
+            const auto sel = static_cast<size_t>(menuCursor);
+            const SpeciesDef &def = Species(menuCursor);
+            state.dexSeen = world.seen[sel];
+            state.dexCaught = world.caught[sel];
+            if (world.caught[sel])
+            {
+                state.dexTitle = std::string(def.name) + "  " + TypeName(def.type);
+                const std::vector<std::string> lines = Wrap(def.dex, 34);
+                state.dexText.clear();
+                for (size_t i = 0; i < lines.size() && i < 2; ++i)
+                {
+                    state.dexText += (i > 0 ? "\n" : "") + lines[i];
+                }
+            }
+            else if (world.seen[sel])
+            {
+                state.dexTitle = def.name;
+                state.dexText = "Seen, but not caught yet.";
+            }
+            else
+            {
+                state.dexTitle = "???";
+                state.dexText = "Not seen yet.";
+            }
         }
-        std::snprintf(buffer, sizeof(buffer), "%02d", i + 1);
-        r.TextCentered(buffer, x, y - 1.0f, DIM_TEXT);
     }
-    std::snprintf(buffer, sizeof(buffer), "Caught %d/%d", CaughtCount(world), SPECIES_COUNT);
-    r.Text(buffer, 24.0f, 30.0f, SOFT_TEXT);
-    const auto sel = static_cast<size_t>(menuCursor);
-    const SpeciesDef &def = Species(menuCursor);
-    if (world.caught[sel])
+
+    // Battle
+    if (in_battle)
     {
-        r.Text(std::string(def.name) + "  " + TypeName(def.type), 24.0f, 104.0f, GOLD_TEXT);
-        const std::vector<std::string> lines = Wrap(def.dex, 34);
-        for (size_t i = 0; i < lines.size() && i < 2; ++i)
-        {
-            r.Text(lines[i], 24.0f, 116.0f + static_cast<Float>(i) * 11.0f);
-        }
-    }
-    else if (world.seen[sel])
-    {
-        r.Text(def.name, 24.0f, 104.0f, GOLD_TEXT);
-        r.Text("Seen, but not caught yet.", 24.0f, 116.0f, SOFT_TEXT);
+        battle.FillUi(world, *ui, state);
     }
     else
     {
-        r.Text("???", 24.0f, 104.0f, DIM_TEXT);
-        r.Text("Not seen yet.", 24.0f, 116.0f, SOFT_TEXT);
+        state.battleTeam = false;
     }
+
+    // Ending: the lines appear one by one, then the stats.
+    state.endingLines = 0;
+    state.stats.clear();
+    if (phase == Phase::ENDING)
+    {
+        for (Int32 i = 0; i < 5; ++i)
+        {
+            if (phaseTime > 0.8f + static_cast<Float>(i) * 0.7f)
+            {
+                state.endingLines = i + 1;
+            }
+        }
+        if (phaseTime > 5.0f)
+        {
+            std::snprintf(buffer, sizeof(buffer), "Time %d:%02d   Critterdex %d/%d", seconds / 60,
+                          seconds % 60, CaughtCount(world), SPECIES_COUNT);
+            state.stats = buffer;
+        }
+    }
+    ui->Commit();
 }
 
 void GameScene::RenderEnding()
@@ -1241,31 +1208,6 @@ void GameScene::RenderEnding()
         const Float x = 120.0f + (static_cast<Float>(i) - static_cast<Float>(world.party.size() - 1) * 0.5f) * 22.0f;
         const Float hop = std::max(0.0f, std::sin(t * 5.0f + static_cast<Float>(i))) * 3.0f;
         r.Draw(SpeciesSprite(world.party[i].species, false, (world.tickCount / 15) % 2), x, 98.0f - hop, o);
-    }
-    const char *lines[] = {
-        "The Sunstone shines again,",
-        "and the critters of the Rootwood",
-        "are calm and happy once more.",
-        "",
-        "Thanks for playing CRITTER CAP!",
-    };
-    Float y = 104.0f;
-    for (Int32 i = 0; i < 5; ++i)
-    {
-        if (t > 0.8f + static_cast<Float>(i) * 0.7f)
-        {
-            r.TextCentered(lines[i], 120.0f, y, i >= 4 ? GOLD_TEXT : Color{});
-        }
-        y += 10.0f;
-    }
-    r.TextCentered("CRITTER CAP", 120.0f, 6.0f, GOLD_TEXT, 2.0f);
-    if (t > 5.0f)
-    {
-        char buffer[64];
-        const auto seconds = static_cast<Int32>(playTime);
-        std::snprintf(buffer, sizeof(buffer), "Time %d:%02d   Critterdex %d/%d", seconds / 60, seconds % 60,
-                      CaughtCount(world), SPECIES_COUNT);
-        r.TextCentered(buffer, 120.0f, 24.0f, SOFT_TEXT);
     }
 }
 } // namespace crittercap
