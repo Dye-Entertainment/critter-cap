@@ -19,6 +19,9 @@ scripts in `tools/`.
 | Cancel / hold to run           | X / K / C / Shift           | B / X     |
 | Team and Critterdex            | Enter / P                   | Start     |
 
+On phones and tablets the browser version shows a touch D-pad with A, B and START buttons
+(`?touch=1` / `?touch=0` in the address forces them on or off).
+
 ## How it plays
 
 - **Tall grass** hides wild critters; in Root Hollow they can jump out anywhere.
